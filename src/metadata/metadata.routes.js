@@ -5,6 +5,10 @@ import {
     searchMovie,
     searchTv,
 } from './tmdb.client.js';
+import {
+    matchMediaItemWithTmdb,
+    refreshSeriesEpisodesFromTmdb,
+} from './metadata.service.js';
 
 export function createMetadataRouter() {
     const router = express.Router();
@@ -68,6 +72,48 @@ export function createMetadataRouter() {
         } catch (err) {
             console.error('TMDB movie search failed:', err);
             res.status(500).json({ error: 'TMDB movie search failed' });
+        }
+    });
+
+    router.post('/tmdb/match/:mediaItemId', async (req, res) => {
+        try {
+            const mediaItemId = Number(req.params.mediaItemId);
+
+            if (!Number.isInteger(mediaItemId) || mediaItemId <= 0) {
+                return res.status(400).json({ error: 'Invalid mediaItemId' });
+            }
+
+            const result = await matchMediaItemWithTmdb(mediaItemId);
+
+            if (!result) {
+                return res.status(404).json({ error: 'Media item not found' });
+            }
+
+            res.json(result);
+        } catch (err) {
+            console.error('TMDB match failed:', err);
+            res.status(500).json({ error: 'TMDB match failed' });
+        }
+    });
+
+    router.post('/tmdb/refresh-episodes/:mediaItemId', async (req, res) => {
+        try {
+            const mediaItemId = Number(req.params.mediaItemId);
+
+            if (!Number.isInteger(mediaItemId) || mediaItemId <= 0) {
+                return res.status(400).json({ error: 'Invalid mediaItemId' });
+            }
+
+            const result = await refreshSeriesEpisodesFromTmdb(mediaItemId);
+
+            if (!result) {
+                return res.status(404).json({ error: 'Media item not found' });
+            }
+
+            res.json(result);
+        } catch (err) {
+            console.error('TMDB episode refresh failed:', err);
+            res.status(500).json({ error: 'TMDB episode refresh failed' });
         }
     });
 

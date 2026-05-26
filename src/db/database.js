@@ -19,9 +19,14 @@ export function openDatabase(options = {}) {
     db.pragma('foreign_keys = ON');
 
     initializeSchema(db);
+    runMigrations(db);
     seedDefaultPreferences(db);
 
     return db;
+}
+
+function runMigrations(database) {
+    ensureColumn(database, 'media_files', 'still_path', 'TEXT');
 }
 
 function initializeSchema(database) {
@@ -152,4 +157,13 @@ export function getDatabase() {
     }
 
     return db;
+}
+
+function ensureColumn(database, tableName, columnName, columnDefinition) {
+    const columns = database.prepare(`PRAGMA table_info(${tableName})`).all();
+    const exists = columns.some((column) => column.name === columnName);
+
+    if (!exists) {
+        database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
+    }
 }

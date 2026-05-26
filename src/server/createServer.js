@@ -1,3 +1,4 @@
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 
@@ -28,6 +29,15 @@ export function createServer(options) {
 
     // Serve Lightning MSDF fonts for the packaged LG app.
     app.use('/fonts', express.static(fontDir));
+
+
+    app.use(
+        '/images',
+        express.static(path.resolve(process.cwd(), 'data/images'), {
+            maxAge: '30d',
+            immutable: true,
+        }),
+    );
 
     // Serve static frontend files from the "public" directory.
     app.use(express.static(publicDir));

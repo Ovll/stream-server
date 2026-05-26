@@ -4,6 +4,46 @@ export function upsertMediaFromParsedFile(fileInfo) {
     const db = getDatabase();
 
     const transaction = db.transaction(() => {
+        const existingFile = db
+            .prepare(
+                `
+                SELECT *
+                FROM media_files
+                WHERE absolute_path = ?
+                LIMIT 1
+                `,
+            )
+            .get(fileInfo.absolutePath);
+
+        if (existingFile) {
+            const mediaItem = db
+                .prepare(
+                    `
+                    SELECT *
+                    FROM media_items
+                    WHERE id = ?
+                    LIMIT 1
+                    `,
+                )
+                .get(existingFile.media_item_id);
+
+            const mediaFile = upsertMediaFile({
+                mediaItemId: existingFile.media_item_id,
+                absolutePath: fileInfo.absolutePath,
+                filename: fileInfo.filename,
+                extension: fileInfo.extension,
+                sizeBytes: fileInfo.sizeBytes,
+                seasonNumber: fileInfo.seasonNumber,
+                episodeNumber: fileInfo.episodeNumber,
+                episodeTitle: existingFile.episode_title || fileInfo.episodeTitle,
+            });
+
+            return {
+                mediaItem,
+                mediaFile,
+            };
+        }
+
         const mediaItem = upsertMediaItem({
             type: fileInfo.type,
             title: fileInfo.title,
@@ -264,6 +304,7 @@ export function getCatalog() {
             mf.season_number AS seasonNumber,
             mf.episode_number AS episodeNumber,
             mf.episode_title AS episodeTitle,
+            mf.still_path AS stillPath,
 
             pp.position_seconds AS positionSeconds,
             pp.duration_seconds AS durationSeconds,
@@ -287,6 +328,8 @@ export function getCatalog() {
         year: row.year,
         posterPath: row.posterPath,
         backdropPath: row.backdropPath,
+        posterUrl: buildTmdbImageUrl(row.posterPath, 'w500'),
+        backdropUrl: buildTmdbImageUrl(row.backdropPath, 'w780'),
         file: {
             id: row.mediaFileId,
             filename: row.filename,
@@ -306,6 +349,8 @@ export function getCatalog() {
                 year: row.year,
                 posterPath: row.posterPath,
                 backdropPath: row.backdropPath,
+                posterUrl: buildTmdbImageUrl(row.posterPath, 'w500'),
+                backdropUrl: buildTmdbImageUrl(row.backdropPath, 'w780'),
                 episodeCount: 0,
                 seasons: [],
             });
@@ -335,6 +380,8 @@ export function getCatalog() {
             filename: row.filename,
             absolutePath: row.absolutePath,
             streamUrl: `/stream/direct/${row.mediaFileId}`,
+            stillPath: row.stillPath,
+            stillUrl: buildTmdbImageUrl(row.stillPath, 'w300'),
             positionSeconds: row.positionSeconds || 0,
             durationSeconds: row.durationSeconds || null,
             completed: row.completed || 0,
@@ -513,6 +560,57 @@ export function getFilePlayTarget(mediaFileId) {
     return toPlayTarget(mediaItem, row);
 }
 
+export function updateMediaItemMetadata(mediaItemId, metadata) {
+    const db = getDatabase();
+
+    db.prepare(
+        `
+        UPDATE media_items
+        SET title = ?,
+            sort_title = ?,
+            overview = ?,
+            poster_path = ?,
+            backdrop_path = ?,
+            external_source = ?,
+            external_id = ?,
+            metadata_json = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        `,
+    ).run(
+        metadata.title,
+        normalizeSortTitle(metadata.title),
+        metadata.overview || null,
+        metadata.posterPath || null,
+        metadata.backdropPath || null,
+        metadata.externalSource,
+        String(metadata.externalId),
+        JSON.stringify(metadata.metadata || {}),
+        mediaItemId,
+    );
+
+    return db.prepare(`SELECT * FROM media_items WHERE id = ?`).get(mediaItemId);
+}
+
+export function updateMediaFileEpisodeMetadata(mediaFileId, metadata) {
+    const db = getDatabase();
+
+    db.prepare(
+        `
+        UPDATE media_files
+        SET episode_title = ?,
+            still_path = ?
+        WHERE id = ?
+        `,
+    ).run(
+        metadata.episodeTitle || null,
+        metadata.stillPath || null,
+        mediaFileId,
+    );
+
+    return db.prepare(`SELECT * FROM media_files WHERE id = ?`).get(mediaFileId);
+}
+
 function toPlayTarget(mediaItem, file) {
     return {
         mediaItemId: mediaItem.id,
@@ -532,4 +630,10 @@ function toPlayTarget(mediaItem, file) {
 
         streamUrl: `/stream/direct/${file.id}`,
     };
+}
+
+function buildTmdbImageUrl(filePath, size = 'w500') {
+    if (!filePath) return null;
+
+    return `https://image.tmdb.org/t/p/${size}${filePath}`;
 }
