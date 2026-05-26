@@ -1,4 +1,5 @@
 import { getDatabase } from '../db/database.js';
+import { cacheTmdbImage } from '../images/imageCache.service.js';
 import {
     updateMediaFileEpisodeMetadata,
     updateMediaItemMetadata,
@@ -85,6 +86,8 @@ export async function refreshSeriesEpisodesFromTmdb(mediaItemId) {
                 file.episode_number,
             );
 
+            await cacheTmdbImage('stills', details.still_path, 'w300');
+
             const updated = updateMediaFileEpisodeMetadata(file.id, {
                 episodeTitle: details.name || null,
                 stillPath: details.still_path || null,
@@ -130,6 +133,9 @@ async function matchMovie(mediaItem) {
         };
     }
 
+    await cacheTmdbImage('posters', match.poster_path, 'w500');
+    await cacheTmdbImage('backdrops', match.backdrop_path, 'w780');
+
     const updated = updateMediaItemMetadata(mediaItem.id, {
         title: match.title || mediaItem.title,
         overview: match.overview || null,
@@ -163,6 +169,9 @@ async function matchSeries(mediaItem) {
             updated: null,
         };
     }
+
+    await cacheTmdbImage('posters', match.poster_path, 'w500');
+    await cacheTmdbImage('backdrops', match.backdrop_path, 'w780');
 
     const updated = updateMediaItemMetadata(mediaItem.id, {
         title: match.name || mediaItem.title,

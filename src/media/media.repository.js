@@ -1,4 +1,5 @@
 import { getDatabase } from '../db/database.js';
+import { getCachedImagePublicPath } from '../images/imageCache.service.js';
 
 export function upsertMediaFromParsedFile(fileInfo) {
     const db = getDatabase();
@@ -328,8 +329,8 @@ export function getCatalog() {
         year: row.year,
         posterPath: row.posterPath,
         backdropPath: row.backdropPath,
-        posterUrl: buildTmdbImageUrl(row.posterPath, 'w500'),
-        backdropUrl: buildTmdbImageUrl(row.backdropPath, 'w780'),
+        posterUrl: buildCachedImageUrl('posters', row.posterPath, 'w500'),
+        backdropUrl: buildCachedImageUrl('backdrops', row.backdropPath, 'w780'),
         file: {
             id: row.mediaFileId,
             filename: row.filename,
@@ -349,8 +350,8 @@ export function getCatalog() {
                 year: row.year,
                 posterPath: row.posterPath,
                 backdropPath: row.backdropPath,
-                posterUrl: buildTmdbImageUrl(row.posterPath, 'w500'),
-                backdropUrl: buildTmdbImageUrl(row.backdropPath, 'w780'),
+                posterUrl: buildCachedImageUrl('posters', row.posterPath, 'w500'),
+                backdropUrl: buildCachedImageUrl('backdrops', row.backdropPath, 'w780'),
                 episodeCount: 0,
                 seasons: [],
             });
@@ -381,7 +382,7 @@ export function getCatalog() {
             absolutePath: row.absolutePath,
             streamUrl: `/stream/direct/${row.mediaFileId}`,
             stillPath: row.stillPath,
-            stillUrl: buildTmdbImageUrl(row.stillPath, 'w300'),
+            stillUrl: buildCachedImageUrl('stills', row.stillPath, 'w300'),
             positionSeconds: row.positionSeconds || 0,
             durationSeconds: row.durationSeconds || null,
             completed: row.completed || 0,
@@ -632,8 +633,6 @@ function toPlayTarget(mediaItem, file) {
     };
 }
 
-function buildTmdbImageUrl(filePath, size = 'w500') {
-    if (!filePath) return null;
-
-    return `https://image.tmdb.org/t/p/${size}${filePath}`;
+function buildCachedImageUrl(kind, filePath, size = 'w500') {
+    return getCachedImagePublicPath(kind, filePath, size);
 }
