@@ -1,7 +1,8 @@
 # Dependencies
 node_modules/
 ui/
-media/
+media-files/
+data/
 # Environment Variables
 .env
 *.ipk

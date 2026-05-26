@@ -4,6 +4,7 @@ import cors from 'cors';
 import { createMediaRouter } from '../media/media.routes.js';
 import { createStreamRouter } from '../stream/stream.routes.js';
 import { createProgressRouter } from '../progress/progress.routes.js';
+import { createMetadataRouter } from '../metadata/metadata.routes.js';
 
 export function createServer(options) {
     const {
@@ -36,6 +37,8 @@ export function createServer(options) {
 
     // Playback progress API.
     app.use('/api/progress', createProgressRouter());
+
+    app.use('/api/metadata', createMetadataRouter());
 
     // Video streaming API.
     app.use('/stream', createStreamRouter());
