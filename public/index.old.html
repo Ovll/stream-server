@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stream Server Dashboard</title>
+    <style>
+      body {
+        background-color: #0a0a0a;
+        color: #ffffff;
+        font-family: "Segoe UI", Roboto, sans-serif;
+        margin: 0;
+        padding: 40px;
+      }
+      h1 {
+        font-size: 32px;
+        color: #e50914;
+        margin-bottom: 5px;
+      }
+      .sub {
+        color: #666;
+        margin-bottom: 40px;
+        font-size: 14px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 24px;
+      }
+      .card {
+        background: #141414;
+        border: 2px solid #222;
+        border-radius: 8px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: all 0.2s ease-in-out;
+      }
+      /* Excellent for LG Magic Remote hover and focus borders */
+      .card:focus-within,
+      .card:hover {
+        border-color: #e50914;
+        background: #1f1f1f;
+        transform: scale(1.02);
+      }
+      .card h3 {
+        margin: 0 0 20px 0;
+        font-size: 18px;
+        line-height: 1.4;
+        word-break: break-word;
+      }
+      .btn-group {
+        display: flex;
+        gap: 10px;
+      }
+      .btn {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 4px;
+        font-weight: bold;
+        cursor: pointer;
+        text-align: center;
+        text-decoration: none;
+        font-size: 14px;
+        transition: background 0.2s;
+      }
+      .btn-direct {
+        background-color: #333;
+        color: white;
+      }
+      .btn-direct:hover {
+        background-color: #444;
+      }
+      .btn-transcode {
+        background-color: #e50914;
+        color: white;
+      }
+      .btn-transcode:hover {
+        background-color: #b80710;
+      }
+      .empty-state {
+        color: #aaa;
+        font-size: 18px;
+        grid-column: 1 / -1;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🚀 Stream Server</h1>
+    <div class="sub" id="directory-path">Scanning target folder...</div>
+
+    <div class="grid" id="media-grid"></div>
+
+    <script>
+      async function loadMedia() {
+        const grid = document.getElementById("media-grid");
+
+        try {
+          const response = await fetch("/api/media");
+          const videos = await response.json();
+
+          if (videos.length === 0) {
+            grid.innerHTML = `<div class="empty-state">No compatible video files found. Drop some files into your media directory!</div>`;
+            return;
+          }
+
+          grid.innerHTML = ""; // Clear empty slate
+
+          videos.forEach((video) => {
+            // Create card container
+            const card = document.createElement("div");
+            card.className = "card";
+
+            // Encode absolute path safely for URL queries
+            const encodedPath = encodeURIComponent(video.absolutePath);
+
+            card.innerHTML = `
+                        <h3>${video.title}</h3>
+                        <div class="btn-group">
+                            <a href="/stream/direct?path=${encodedPath}" class="btn btn-direct">Direct Play</a>
+                            <a href="/stream/transcode?path=${encodedPath}" class="btn btn-transcode">Transcode</a>
+                        </div>
+                    `;
+            grid.appendChild(card);
+          });
+        } catch (err) {
+          console.error("Error loading library items:", err);
+          grid.innerHTML = `<div class="empty-state" style="color: red;">Error connection failed. Is the backend running?</div>`;
+        }
+      }
+
+      // Initialize dashboard populate on boot
+      loadMedia();
+    </script>
+  </body>
+</html>
