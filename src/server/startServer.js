@@ -1,5 +1,5 @@
 import { createServer } from './createServer.js';
-// import { startMediaWatcher } from '../media/media.watcher.js';
+import { startMediaWatcher } from '../media/media.watcher.js';
 
 export function startServer(options) {
     const {
@@ -9,7 +9,7 @@ export function startServer(options) {
         fontDir,
         publicDir,
         macLanUrl,
-        // watchMedia = true,
+        watchMedia = true,
     } = options;
 
     const app = createServer({
@@ -27,17 +27,17 @@ export function startServer(options) {
         if (macLanUrl) {
             console.log(`From LG:  ${macLanUrl}`);
         }
-        // if (watchMedia) {
-        //     mediaWatcher = startMediaWatcher(mediaDir);
-        //     console.log(`Watching media dir: ${mediaDir}`);
-        // }
+        if (watchMedia) {
+            mediaWatcher = startMediaWatcher(mediaDir);
+            console.log(`Watching media dir: ${mediaDir}`);
+        }
     });
-    // httpServer.on('close', async () => {
-    //     if (mediaWatcher) {
-    //         await mediaWatcher.close();
-    //         mediaWatcher = null;
-    //     }
-    // });
+    httpServer.on('close', async () => {
+        if (mediaWatcher) {
+            await mediaWatcher.close();
+            mediaWatcher = null;
+        }
+    });
 
     return httpServer;
 }
