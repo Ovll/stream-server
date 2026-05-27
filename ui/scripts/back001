@@ -1,0 +1,233 @@
+const fs = require("fs");
+const path = require("path");
+
+const root = process.cwd();
+const outDir = path.join(root, "dist", "lg");
+
+const indexHtmlPath = path.join(outDir, "index.html");
+const appinfoSrc = path.join(root, "devices", "lg", "appinfo.json");
+const iconSrc = path.join(root, "devices", "lg", "icon.png");
+
+const appinfoDest = path.join(outDir, "appinfo.json");
+const iconDest = path.join(outDir, "icon.png");
+
+if (!fs.existsSync(indexHtmlPath)) {
+  throw new Error(`Missing ${indexHtmlPath}`);
+}
+
+fs.copyFileSync(appinfoSrc, appinfoDest);
+fs.copyFileSync(iconSrc, iconDest);
+
+const originalHtml = fs.readFileSync(indexHtmlPath, "utf8");
+
+const polyfillMatch = originalHtml.match(
+  /<script[^>]+src=["']([^"']*polyfills-legacy[^"']*\.js)["'][^>]*>/i,
+);
+
+const legacyEntryMatch =
+  originalHtml.match(
+    /<script[^>]+id=["']vite-legacy-entry["'][^>]+data-src=["']([^"']*index-legacy[^"']*\.js)["'][^>]*>/i,
+  ) ||
+  originalHtml.match(
+    /<script[^>]+data-src=["']([^"']*index-legacy[^"']*\.js)["'][^>]*>/i,
+  ) ||
+  originalHtml.match(
+    /<script[^>]+src=["']([^"']*index-legacy[^"']*\.js)["'][^>]*>/i,
+  );
+
+if (!legacyEntryMatch) {
+  console.error(originalHtml);
+  throw new Error("Could not find legacy entry script in index.html");
+}
+
+const polyfillSrc = polyfillMatch ? polyfillMatch[1] : null;
+const legacyEntrySrc = legacyEntryMatch[1];
+
+const cleanHtml = `<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+  />
+  <title>Stream Server</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #001800;
+      overflow: hidden;
+      color: white;
+      font-family: sans-serif;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+    }
+
+    #lg-status {
+      position: fixed;
+      left: 20px;
+      top: 20px;
+      right: 20px;
+      z-index: 999998;
+      padding: 20px;
+      background: #003000;
+      color: #00ff00;
+      font-size: 28px;
+      line-height: 1.25;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+
+    #lg-error {
+      position: fixed;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 999999999;
+      padding: 24px;
+      background: #300000;
+      color: #ffffff;
+      font-size: 24px;
+      line-height: 1.25;
+      white-space: pre-wrap;
+      font-family: monospace;
+      overflow: auto;
+      display: none;
+    }
+
+    .url {
+      color: #ffff00;
+      font-size: 28px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <pre id="lg-status">HTML loaded. Installing debug hooks...</pre>
+  <pre id="lg-error"></pre>
+
+  <script>
+    (function () {
+      var status = document.getElementById("lg-status");
+      var errorBox = document.getElementById("lg-error");
+      var lastFetchUrl = "(no fetch captured yet)";
+
+      function setStatus(text) {
+        status.style.display = "block";
+        status.textContent = text;
+      }
+
+      function showError(title, details) {
+        status.style.display = "none";
+        errorBox.style.display = "block";
+        errorBox.textContent =
+          title +
+          "\\n\\nLAST FETCH URL:\\n" +
+          lastFetchUrl +
+          "\\n\\nDETAILS:\\n" +
+          details;
+      }
+
+      window.__lgShowError = showError;
+      window.__lgSetStatus = setStatus;
+
+      window.onerror = function (message, source, lineno, colno, error) {
+        showError(
+          "WINDOW ERROR",
+          "message: " + message + "\\n" +
+          "source: " + source + "\\n" +
+          "line: " + lineno + "\\n" +
+          "column: " + colno + "\\n\\n" +
+          "error: " + (error && (error.stack || error.message || error))
+        );
+        return true;
+      };
+
+      window.onunhandledrejection = function (event) {
+        showError(
+          "UNHANDLED PROMISE REJECTION",
+          String(event.reason && (event.reason.stack || event.reason.message || event.reason))
+        );
+      };
+
+      if (typeof window.fetch === "function") {
+        var originalFetch = window.fetch.bind(window);
+
+        window.fetch = function (input, init) {
+          var url = "(unknown)";
+
+          try {
+            if (typeof input === "string") {
+              url = input;
+            } else if (input && input.url) {
+              url = input.url;
+            } else {
+              url = String(input);
+            }
+          } catch (e) {
+            url = "(failed to read fetch url)";
+          }
+
+          lastFetchUrl = url;
+          setStatus("FETCH STARTED:\\n" + url);
+
+          return originalFetch(input, init)
+            .then(function (response) {
+              setStatus(
+                "FETCH OK: " + response.status + "\\n" +
+                url + "\\n\\n" +
+                "App is still running..."
+              );
+              return response;
+            })
+            .catch(function (err) {
+              showError(
+                "FETCH FAILED",
+                "url: " + url + "\\n\\n" +
+                String(err && (err.stack || err.message || err))
+              );
+              throw err;
+            });
+        };
+      } else {
+        setStatus("fetch is not available before polyfills");
+      }
+
+      setStatus("Debug hooks installed. Loading polyfills/app...");
+    })();
+  </script>
+
+  ${polyfillSrc ? `<script src="${polyfillSrc}"></script>` : ""}
+
+  <script>
+    if (window.__lgSetStatus) {
+      window.__lgSetStatus("Polyfills loaded. Loading app bundle...");
+    }
+  </script>
+
+  <script src="${legacyEntrySrc}"></script>
+
+  <script>
+    if (window.__lgSetStatus) {
+      window.__lgSetStatus("App bundle loaded. Waiting for app/network...");
+    }
+  </script>
+</body>
+</html>
+`;
+
+fs.writeFileSync(indexHtmlPath, cleanHtml);
+
+console.log("[postbuild-lg] copied appinfo.json");
+console.log("[postbuild-lg] copied icon.png");
+console.log("[postbuild-lg] rewrote index.html with fetch/error debugger");
+console.log("[postbuild-lg] polyfill:", polyfillSrc || "(none)");
+console.log("[postbuild-lg] legacy entry:", legacyEntrySrc);

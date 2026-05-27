@@ -1,0 +1,42 @@
+export default {
+  Page: {
+    width: 1920,
+    height: 1080,
+  },
+  headlineText: {
+    maxWidth: 1920,
+    maxHeight: 170,
+    lineHeight: 170,
+    y: 455,
+    contain: "width",
+    maxLines: 1,
+    fontSize: 100,
+    textAlign: "center",
+  },
+  headlineSubText: {
+    width: 1920,
+    height: 170,
+    lineHeight: 170,
+    y: 655,
+    contain: "width",
+    fontSize: 60,
+    textAlign: "center",
+  },
+  Row: {
+    display: "flex",
+    justifyContent: "spaceBetween",
+    width: 1760,
+    height: 300,
+    gap: 26,
+  },
+  Column: {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "flexStart",
+    width: 1760,
+    height: 500,
+    gap: 50,
+    y: 200,
+    x: 80,
+  },
+} as const;

@@ -1,0 +1,10 @@
+{
+    "id": "com.streamserver.app",
+    "version": "1.0.0",
+    "vendor": "StreamServer",
+    "type": "web",
+    "main": "index.html",
+    "title": "Stream Server",
+    "icon": "icon.png",
+    "disableBackHistoryAPI": true
+}

@@ -1,0 +1,272 @@
+import { createRenderer, Config as LightningConfig, loadFonts } from "@lightningtv/solid";
+import { Route } from "@solidjs/router";
+import { HashRouter, useFocusManager } from "@lightningtv/solid/primitives";
+import App from "./pages/App";
+import Library from "./pages/Library";
+import TextPage from "./pages/Text";
+import NotFound from "./pages/NotFound";
+import fonts from "./fonts";
+import { merge } from "lodash-es";
+import { config } from "#devices/common";
+import {
+  Rounded,
+  RoundedWithShadow,
+  RoundedWithBorder,
+  RoundedWithBorderAndShadow,
+  RadialGradient,
+  LinearGradient,
+  HolePunch,
+} from "@lightningjs/renderer/webgl/shaders";
+
+function installFetchDebug() {
+  if (typeof window === "undefined") return;
+  if (typeof window.fetch !== "function") return;
+
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+    showDebug("[FETCH] " + url);
+
+    try {
+      const response = await originalFetch(input, init);
+      showDebug("[FETCH OK] " + response.status + " " + url);
+      return response;
+    } catch (err) {
+      showFatalError(
+        "FETCH FAILED\n\nURL:\n" +
+          url +
+          "\n\nERROR:\n" +
+          String(err instanceof Error ? err.stack || err.message : err),
+      );
+
+      throw err;
+    }
+  };
+}
+
+/**
+ * LG B9 / webOS 4.5 notes:
+ * - Old Chromium.
+ * - App is packaged as legacy classic scripts by our postbuild step.
+ * - Do not rely only on DOMContentLoaded because the legacy bundle can run after it.
+ * - Keep all renderer work after DOM is ready.
+ */
+
+function runWhenDomReady(fn: () => void) {
+  if (typeof document === "undefined") return;
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", fn);
+  } else {
+    fn();
+  }
+}
+
+function showDebug(message: string) {
+  if (typeof document === "undefined") return;
+
+  let box = document.getElementById("lg-debug-box") as HTMLPreElement | null;
+
+  if (!box) {
+    box = document.createElement("pre");
+    box.id = "lg-debug-box";
+    box.style.position = "fixed";
+    box.style.left = "0";
+    box.style.top = "0";
+    box.style.right = "auto";
+    box.style.width = "55%";
+    box.style.maxHeight = "45%";
+    box.style.zIndex = "999999";
+    box.style.margin = "0";
+    box.style.padding = "16px";
+    box.style.background = "rgba(0, 0, 0, 0.85)";
+    box.style.color = "lime";
+    box.style.fontSize = "20px";
+    box.style.lineHeight = "1.2";
+    box.style.whiteSpace = "pre-wrap";
+    box.style.overflow = "hidden";
+    box.style.fontFamily = "monospace";
+    box.style.pointerEvents = "none";
+    document.body.appendChild(box);
+  }
+
+  box.textContent += message + "\n";
+}
+
+function showFatalError(err: unknown) {
+  if (typeof document === "undefined") return;
+
+  const debugBox = document.getElementById("lg-debug-box");
+  if (debugBox) {
+    debugBox.style.display = "none";
+  }
+
+  document.body.style.background = "#300";
+
+  const text = err instanceof Error ? err.stack || err.message : String(err);
+
+  let box = document.getElementById("lg-fatal-error") as HTMLPreElement | null;
+
+  if (!box) {
+    box = document.createElement("pre");
+    box.id = "lg-fatal-error";
+    box.style.position = "fixed";
+    box.style.left = "0";
+    box.style.top = "0";
+    box.style.right = "0";
+    box.style.bottom = "0";
+    box.style.zIndex = "99999999";
+    box.style.margin = "0";
+    box.style.padding = "24px";
+    box.style.background = "#300";
+    box.style.color = "white";
+    box.style.fontSize = "22px";
+    box.style.lineHeight = "1.25";
+    box.style.whiteSpace = "pre-wrap";
+    box.style.overflow = "auto";
+    box.style.fontFamily = "monospace";
+    document.body.appendChild(box);
+  }
+
+  box.textContent = "LG APP CRASHED\n\n" + text;
+}
+
+function installGlobalErrorHandlers() {
+  if (typeof window === "undefined") return;
+
+  window.onerror = function (message, source, lineno, colno, error) {
+    showFatalError(
+      "window.onerror\n\n" +
+        "message: " +
+        String(message) +
+        "\nsource: " +
+        String(source) +
+        "\nline: " +
+        String(lineno) +
+        "\ncolumn: " +
+        String(colno) +
+        "\n\n" +
+        String(error instanceof Error ? error.stack || error.message : error),
+    );
+
+    return true;
+  };
+
+  window.onunhandledrejection = function (event) {
+    showFatalError(
+      "unhandledrejection\n\n" +
+        String(event.reason instanceof Error ? event.reason.stack || event.reason.message : event.reason),
+    );
+  };
+}
+
+function installWebOsPolyfills() {
+  if (typeof window === "undefined") return;
+
+  // Some old webOS Chromium environments do not expose globalThis.
+  if (!window.globalThis) {
+    (window as any).globalThis = window;
+  }
+
+  // Some libraries expect process.env to exist.
+  if (!(window as any).process) {
+    (window as any).process = { env: {} };
+  }
+
+  if (!(window as any).process.env) {
+    (window as any).process.env = {};
+  }
+}
+
+function configureLightning() {
+  config.lightning.rendererOptions.deviceLogicalPixelRatio = 1;
+  config.lightning.rendererOptions.devicePhysicalPixelRatio = 1;
+
+  merge(LightningConfig, config.lightning);
+
+  const finalOpts = LightningConfig.rendererOptions as Record<string, any>;
+
+  finalOpts.numWorkers = 0;
+  finalOpts.numImageWorkers = 0;
+  finalOpts.threadX = false;
+  finalOpts.forceInMainThread = true;
+
+  /**
+   * Start with WebGL enabled because Lightning is normally WebGL based.
+   * If TV still goes black after "[4] createRenderer OK", try changing this to false.
+   */
+  finalOpts.enableWebGl = true;
+}
+
+function bootApp() {
+  try {
+    document.body.style.margin = "0";
+    document.body.style.background = "black";
+    document.body.style.overflow = "hidden";
+
+    showDebug("[1] bootApp started");
+    showDebug("[2] readyState = " + document.readyState);
+
+    installGlobalErrorHandlers();
+    showDebug("[3] error handlers installed");
+
+    installWebOsPolyfills();
+    showDebug("[4] webOS polyfills installed");
+
+    installFetchDebug();
+    showDebug("[5] fetch debug installed");
+
+    configureLightning();
+    showDebug("[5] Lightning config merged");
+
+    const { render, renderer } = createRenderer();
+    showDebug("[6] createRenderer OK");
+
+    const shManager = renderer.stage.shManager;
+
+    shManager.registerShaderType("rounded", Rounded);
+    shManager.registerShaderType("roundedWithBorder", RoundedWithBorder);
+    shManager.registerShaderType("roundedWithShadow", RoundedWithShadow);
+
+    // Register both names because app/theme code may use either spelling.
+    shManager.registerShaderType("roundedWithBorderWithShadow", RoundedWithBorderAndShadow);
+    shManager.registerShaderType("roundedWithBorderAndShadow", RoundedWithBorderAndShadow);
+
+    shManager.registerShaderType("radialGradient", RadialGradient);
+    shManager.registerShaderType("linearGradient", LinearGradient);
+    shManager.registerShaderType("holePunch", HolePunch);
+
+    showDebug("[7] shaders registered");
+
+    loadFonts(fonts);
+    showDebug("[8] fonts loaded");
+
+    render(() => {
+      showDebug("[9] render callback entered");
+
+      useFocusManager(config.keys, config.keyHoldOptions);
+
+      return (
+        <HashRouter root={App}>
+          {/* Main streamer screen: Mac/server library -> TV */}
+          <Route path="/" component={Library} />
+
+          {/* Keep your existing text/test screen */}
+          <Route path="/text" component={TextPage} />
+
+          <Route path="/*all" component={NotFound} />
+        </HashRouter>
+      );
+    });
+
+    showDebug("[10] render() called");
+  } catch (err) {
+    showFatalError(err);
+  }
+}
+
+runWhenDomReady(() => {
+  bootApp();
+});

@@ -1,8 +1,6 @@
 # Dependencies
 node_modules/
-# ui/
-media-files/
-data/
+
 # Environment Variables
 .env
 *.ipk
@@ -27,3 +25,5 @@ Thumbs.db
 
 # Testing
 coverage/
+
+*storybook.log
