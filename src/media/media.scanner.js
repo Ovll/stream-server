@@ -2,12 +2,20 @@ import fs from 'fs';
 import path from 'path';
 
 import { getDatabase } from '../db/database.js';
+import {
+    matchMediaItemWithTmdb,
+    refreshSeriesEpisodesFromTmdb,
+} from '../metadata/metadata.service.js';
 import { parseMediaFilename } from './filenameParser.js';
 import { upsertMediaFromParsedFile } from './media.repository.js';
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.webm'];
 
-export async function scanMediaFolder(mediaDir) {
+export async function scanMediaFolder(mediaDir, options = {}) {
+    const {
+        enrichMetadata = true,
+    } = options;
+
     const db = getDatabase();
 
     if (!fs.existsSync(mediaDir)) {
@@ -17,6 +25,7 @@ export async function scanMediaFolder(mediaDir) {
             insertedOrUpdated: 0,
             removedMissingFiles: 0,
             removedEmptyItems: 0,
+            enrichedItems: 0,
             items: [],
         };
     }
@@ -29,6 +38,7 @@ export async function scanMediaFolder(mediaDir) {
 
     const items = [];
     const seenAbsolutePaths = [];
+    const mediaItemIdsToEnrich = new Set();
 
     for (const filename of videoFiles) {
         const absolutePath = path.join(mediaDir, filename);
@@ -48,17 +58,56 @@ export async function scanMediaFolder(mediaDir) {
         });
 
         items.push(result);
+
+        if (result?.mediaItem?.id) {
+            mediaItemIdsToEnrich.add(result.mediaItem.id);
+        }
     }
 
     const cleanup = cleanupMissingFiles(db, seenAbsolutePaths);
+
+    let enrichedItems = 0;
+
+    if (enrichMetadata) {
+        enrichedItems = await enrichScannedMediaItems(mediaItemIdsToEnrich);
+    }
 
     return {
         scanned: videoFiles.length,
         insertedOrUpdated: items.length,
         removedMissingFiles: cleanup.removedMissingFiles,
         removedEmptyItems: cleanup.removedEmptyItems,
+        enrichedItems,
         items,
     };
+}
+
+async function enrichScannedMediaItems(mediaItemIds) {
+    let enrichedItems = 0;
+
+    for (const mediaItemId of mediaItemIds) {
+        try {
+            const matchResult = await matchMediaItemWithTmdb(mediaItemId);
+
+            if (!matchResult?.updated) {
+                console.warn(`No TMDB match found for media item ${mediaItemId}`);
+                continue;
+            }
+
+            enrichedItems += 1;
+
+            if (matchResult.updated.type === 'series') {
+                await refreshSeriesEpisodesFromTmdb(mediaItemId);
+            }
+        } catch (err) {
+            console.error(
+                `Failed to enrich media item ${mediaItemId}:`,
+                err instanceof Error ? err.message : err,
+            );
+        }
+    }
+
+    return enrichedItems;
 }
 
 function cleanupMissingFiles(db, seenAbsolutePaths) {
