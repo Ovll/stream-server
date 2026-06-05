@@ -10,6 +10,14 @@ export function usePlayback() {
   let currentPlayTarget: PlayTarget | null = null;
   let progressTimer: number | undefined;
 
+  const getPlayer = () => {
+    if (!player) {
+      player = new CommonPlayer();
+    }
+
+    return player;
+  };
+
   const saveCurrentProgress = () => {
     if (!player || !currentPlayTarget) return;
 
@@ -22,7 +30,7 @@ export function usePlayback() {
       mediaFileId: currentPlayTarget.mediaFileId,
       positionSeconds,
       durationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : null,
-    }).catch((err) => {
+    }).catch(err => {
       console.error("Failed to save playback progress:", err);
     });
   };
@@ -44,36 +52,39 @@ export function usePlayback() {
     }
   };
 
-  const stopPlayback = () => {
+  const stopCurrentMedia = () => {
     saveCurrentProgress();
     stopProgressTimer();
 
     if (player) {
       player.stop();
-      player = null;
     }
 
     currentPlayTarget = null;
     setIsPlaying(false);
   };
 
-  const playTarget = async (playTarget: PlayTarget) => {
-    stopPlayback();
+  const stopPlayback = () => {
+    stopCurrentMedia();
+  };
+
+  const playTarget = async (nextPlayTarget: PlayTarget) => {
+    saveCurrentProgress();
+    stopProgressTimer();
 
     try {
-      const streamUrl = getStreamUrlFromPlayTarget(playTarget);
+      const streamUrl = getStreamUrlFromPlayTarget(nextPlayTarget);
+      const nextPlayer = getPlayer();
 
-      currentPlayTarget = playTarget;
-
-      player = new CommonPlayer();
+      currentPlayTarget = nextPlayTarget;
       setIsPlaying(true);
 
-      await player.load(streamUrl, true, playTarget.positionSeconds || 0);
+      await nextPlayer.load(streamUrl, true, nextPlayTarget.positionSeconds || 0);
 
       startProgressTimer();
     } catch (err) {
       console.error("Failed to start playback:", err);
-      stopPlayback();
+      stopCurrentMedia();
     }
   };
 
@@ -101,7 +112,19 @@ export function usePlayback() {
   };
 
   onCleanup(() => {
-    stopPlayback();
+    saveCurrentProgress();
+    stopProgressTimer();
+
+    if (player) {
+      void player.destroy().catch(err => {
+        console.warn("Failed to destroy player:", err);
+      });
+
+      player = null;
+    }
+
+    currentPlayTarget = null;
+    setIsPlaying(false);
   });
 
   return {

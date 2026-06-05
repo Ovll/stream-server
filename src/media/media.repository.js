@@ -75,8 +75,9 @@ export function upsertMediaItem({ type, title, year }) {
     const db = getDatabase();
 
     const sortTitle = normalizeSortTitle(title);
+    const normalizedYear = Number.isInteger(year) ? year : null;
 
-    const existing = db
+    const exactExisting = db
         .prepare(
             `
             SELECT *
@@ -87,22 +88,90 @@ export function upsertMediaItem({ type, title, year }) {
                     year = ?
                     OR (year IS NULL AND ? IS NULL)
                   )
+            ORDER BY
+                external_source IS NOT NULL DESC,
+                external_id IS NOT NULL DESC,
+                year IS NOT NULL DESC,
+                id ASC
             LIMIT 1
             `,
         )
-        .get(type, title, year, year);
+        .get(type, title, normalizedYear, normalizedYear);
 
-    if (existing) {
-        db.prepare(
-            `
-            UPDATE media_items
-            SET sort_title = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            `,
-        ).run(sortTitle, existing.id);
+    if (exactExisting) {
+        updateMediaItemTouch(db, exactExisting.id, sortTitle);
+        return db.prepare(`SELECT * FROM media_items WHERE id = ?`).get(exactExisting.id);
+    }
 
-        return db.prepare(`SELECT * FROM media_items WHERE id = ?`).get(existing.id);
+    // Important fix:
+    // TV filenames often do not include the show year:
+    // Tulsa.King.S02E02... => title "Tulsa King", year NULL
+    //
+    // If the show already exists as a matched TMDB series:
+    // Tulsa King / 2022 / tmdb 153312
+    //
+    // then all new episodes should attach to that existing row.
+    if (type === 'series' && normalizedYear === null) {
+        const existingSeriesByTitle = db
+            .prepare(
+                `
+                SELECT *
+                FROM media_items
+                WHERE type = 'series'
+                  AND title = ?
+                ORDER BY
+                    external_source IS NOT NULL DESC,
+                    external_id IS NOT NULL DESC,
+                    poster_path IS NOT NULL DESC,
+                    year IS NOT NULL DESC,
+                    id ASC
+                LIMIT 1
+                `,
+            )
+            .get(title);
+
+        if (existingSeriesByTitle) {
+            updateMediaItemTouch(db, existingSeriesByTitle.id, sortTitle);
+            return db.prepare(`SELECT * FROM media_items WHERE id = ?`).get(existingSeriesByTitle.id);
+        }
+    }
+
+    // Also handle the opposite case:
+    // first file created series with NULL year, later filename includes year.
+    // Reuse the existing NULL-year row instead of creating a duplicate.
+    if (type === 'series' && normalizedYear !== null) {
+        const existingSeriesWithoutYear = db
+            .prepare(
+                `
+                SELECT *
+                FROM media_items
+                WHERE type = 'series'
+                  AND title = ?
+                  AND year IS NULL
+                ORDER BY
+                    external_source IS NOT NULL DESC,
+                    external_id IS NOT NULL DESC,
+                    poster_path IS NOT NULL DESC,
+                    id ASC
+                LIMIT 1
+                `,
+            )
+            .get(title);
+
+        if (existingSeriesWithoutYear) {
+            db.prepare(
+                `
+                UPDATE media_items
+                SET
+                    sort_title = ?,
+                    year = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                `,
+            ).run(sortTitle, normalizedYear, existingSeriesWithoutYear.id);
+
+            return db.prepare(`SELECT * FROM media_items WHERE id = ?`).get(existingSeriesWithoutYear.id);
+        }
     }
 
     const result = db
@@ -117,9 +186,21 @@ export function upsertMediaItem({ type, title, year }) {
             VALUES (?, ?, ?, ?)
             `,
         )
-        .run(type, title, sortTitle, year);
+        .run(type, title, sortTitle, normalizedYear);
 
     return db.prepare(`SELECT * FROM media_items WHERE id = ?`).get(result.lastInsertRowid);
+}
+
+function updateMediaItemTouch(db, mediaItemId, sortTitle) {
+    db.prepare(
+        `
+        UPDATE media_items
+        SET
+            sort_title = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        `,
+    ).run(sortTitle, mediaItemId);
 }
 
 export function upsertMediaFile({
@@ -235,7 +316,7 @@ export function listMediaItemsForHome() {
 }
 
 function normalizeSortTitle(title) {
-    return title
+    return String(title || '')
         .toLowerCase()
         .replace(/^the\s+/, '')
         .replace(/^a\s+/, '')
@@ -262,7 +343,6 @@ export function getMediaFileById(mediaFileId) {
         )
         .get(mediaFileId);
 }
-
 
 export function getCatalog() {
     const db = getDatabase();
@@ -387,6 +467,7 @@ export function getCatalog() {
             durationSeconds: row.durationSeconds || null,
             completed: row.completed || 0,
         });
+
         season.episodeCount += 1;
         series.episodeCount += 1;
     }
@@ -439,7 +520,6 @@ export function getPlayTarget(mediaItemId) {
     }
 
     if (mediaItem.type === 'series') {
-        // 1. Continue the most recently watched unfinished episode.
         const inProgressEpisode = db
             .prepare(
                 `
@@ -464,7 +544,6 @@ export function getPlayTarget(mediaItemId) {
             return toPlayTarget(mediaItem, inProgressEpisode);
         }
 
-        // 2. Otherwise play first not-completed episode.
         const firstUnwatchedEpisode = db
             .prepare(
                 `
@@ -490,7 +569,6 @@ export function getPlayTarget(mediaItemId) {
             return toPlayTarget(mediaItem, firstUnwatchedEpisode);
         }
 
-        // 3. If everything is completed, start from first episode.
         const firstEpisode = db
             .prepare(
                 `
