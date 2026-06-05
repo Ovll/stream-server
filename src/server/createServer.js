@@ -6,6 +6,7 @@ import { createMediaRouter } from '../media/media.routes.js';
 import { createStreamRouter } from '../stream/stream.routes.js';
 import { createProgressRouter } from '../progress/progress.routes.js';
 import { createMetadataRouter } from '../metadata/metadata.routes.js';
+import { createCatalogEventsRouter } from '../events/catalogEvents.js';
 
 export function createServer(options) {
     const {
@@ -38,6 +39,8 @@ export function createServer(options) {
             immutable: true,
         }),
     );
+
+    app.get('/api/events', createCatalogEventsRouter());
 
     // Serve static frontend files from the "public" directory.
     app.use(express.static(publicDir));

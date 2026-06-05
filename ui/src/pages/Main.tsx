@@ -5,10 +5,11 @@ import { useMediaList } from "./main/useMediaList";
 import { useMainNavigation } from "./main/useMainNavigation";
 import MediaList from "./main/MediaList";
 import SeriesDetails from "./main/SeriesDetails";
+import { useCatalogEvents } from "./main/useCatalogEvents";
 
 const Main = () => {
   const { rows, reload } = useMediaList();
-
+  useCatalogEvents(reload);
   const navigation = useMainNavigation({
     rows,
     reloadCatalog: reload,

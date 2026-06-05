@@ -9,6 +9,7 @@ import {
 } from '../metadata/metadata.service.js';
 import { parseMediaFilename } from './filenameParser.js';
 import { upsertMediaFromParsedFile } from './media.repository.js';
+import { notifyCatalogChanged } from '../events/catalogEvents.js';
 
 const VIDEO_EXTENSIONS = new Set([
     '.mp4',
@@ -87,6 +88,11 @@ async function handleAddOrChange(filePath, options) {
         if (options.enrichMetadata && mediaItemId) {
             await enrichMediaItem(mediaItemId);
         }
+
+        notifyCatalogChanged('media-added-or-changed', {
+            mediaItemId,
+            filename,
+        });
     } catch (err) {
         console.error(
             `Failed to index media file ${filePath}:`,
@@ -181,6 +187,11 @@ async function deleteMediaFileFromDatabase(filePath) {
         transaction();
 
         console.log(`Media file removed from DB: ${file.filename}`);
+        notifyCatalogChanged('media-removed', {
+            mediaItemId: file.media_item_id,
+            mediaFileId: file.id,
+            filename: file.filename,
+        });
     } catch (err) {
         console.error(
             `Failed to remove media file from DB ${filePath}:`,
