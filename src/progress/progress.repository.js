@@ -15,12 +15,41 @@ export function getProgressByMediaFileId(mediaFileId) {
         .get(mediaFileId);
 }
 
+export function mediaFileExists(mediaFileId) {
+    const db = getDatabase();
+
+    const row = db
+        .prepare(
+            `
+            SELECT id
+            FROM media_files
+            WHERE id = ?
+            LIMIT 1
+            `,
+        )
+        .get(mediaFileId);
+
+    return Boolean(row);
+}
+
 export function saveProgress({
     mediaFileId,
     positionSeconds,
     durationSeconds,
 }) {
     const db = getDatabase();
+
+    if (!mediaFileExists(mediaFileId)) {
+        return {
+            ignored: true,
+            reason: 'media file not found',
+            media_file_id: mediaFileId,
+            position_seconds: 0,
+            duration_seconds: null,
+            completed: 0,
+            updated_at: null,
+        };
+    }
 
     const safePosition = Number(positionSeconds) || 0;
     const safeDuration = Number(durationSeconds) || null;
@@ -50,6 +79,23 @@ export function saveProgress({
     ).run(mediaFileId, safePosition, safeDuration, completed);
 
     return getProgressByMediaFileId(mediaFileId);
+}
+
+export function deleteOrphanProgressRows() {
+    const db = getDatabase();
+
+    const result = db
+        .prepare(
+            `
+            DELETE FROM playback_progress
+            WHERE media_file_id NOT IN (
+                SELECT id FROM media_files
+            )
+            `,
+        )
+        .run();
+
+    return result.changes;
 }
 
 export function listContinueWatching() {

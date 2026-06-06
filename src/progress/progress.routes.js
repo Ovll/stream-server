@@ -1,8 +1,10 @@
 import express from 'express';
 
 import {
+    deleteOrphanProgressRows,
     getProgressByMediaFileId,
     listContinueWatching,
+    mediaFileExists,
     saveProgress,
 } from './progress.repository.js';
 
@@ -19,12 +21,37 @@ export function createProgressRouter() {
         }
     });
 
+    router.post('/cleanup-orphans', (req, res) => {
+        try {
+            const deleted = deleteOrphanProgressRows();
+
+            res.json({
+                deleted,
+            });
+        } catch (err) {
+            console.error('Failed to cleanup orphan progress rows:', err);
+            res.status(500).json({ error: 'Failed to cleanup orphan progress rows' });
+        }
+    });
+
     router.get('/:mediaFileId', (req, res) => {
         try {
             const mediaFileId = Number(req.params.mediaFileId);
 
             if (!Number.isInteger(mediaFileId) || mediaFileId <= 0) {
                 return res.status(400).json({ error: 'Invalid mediaFileId' });
+            }
+
+            if (!mediaFileExists(mediaFileId)) {
+                return res.json({
+                    ignored: true,
+                    reason: 'media file not found',
+                    media_file_id: mediaFileId,
+                    position_seconds: 0,
+                    duration_seconds: null,
+                    completed: 0,
+                    updated_at: null,
+                });
             }
 
             const progress = getProgressByMediaFileId(mediaFileId);
