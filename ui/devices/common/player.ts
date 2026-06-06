@@ -90,17 +90,17 @@ export class CommonPlayer implements Player {
       throw new Error("Player was destroyed.");
     }
 
-    // if (this.shouldUseNativeVideo(streamUrl)) {
-    //   await this.loadNative(streamUrl, autoPlay, startTime);
-    //   return;
-    // }
+    if (this.shouldUseNativeVideo(streamUrl)) {
+      await this.loadNative(streamUrl, autoPlay, startTime);
+      return;
+    }
 
-    // if (this.shouldUseShaka(streamUrl)) {
-    await this.loadWithShaka(streamUrl, autoPlay, startTime);
-    //   return;
-    // }
+    if (this.shouldUseShaka(streamUrl)) {
+      await this.loadWithShaka(streamUrl, autoPlay, startTime);
+      return;
+    }
 
-    // await this.loadNative(streamUrl, autoPlay, startTime);
+    await this.loadNative(streamUrl, autoPlay, startTime);
   }
 
   private async loadNative(streamUrl: string, autoPlay: boolean, startTime?: number): Promise<void> {
