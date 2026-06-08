@@ -322,5 +322,7 @@ export function useMainNavigation(props: UseMainNavigationProps) {
     selectedSeries,
 
     isPlaying: playback.isPlaying,
+
+    reloadCatalogAndRefreshSelectedSeries,
   };
 }

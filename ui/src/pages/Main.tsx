@@ -9,11 +9,13 @@ import { useCatalogEvents } from "./main/useCatalogEvents";
 
 const Main = () => {
   const { rows, reload } = useMediaList();
-  useCatalogEvents(reload);
+
   const navigation = useMainNavigation({
     rows,
     reloadCatalog: reload,
   });
+
+  useCatalogEvents(navigation.reloadCatalogAndRefreshSelectedSeries);
 
   return (
     <View x={100} y={100} width={1720} height={880}>

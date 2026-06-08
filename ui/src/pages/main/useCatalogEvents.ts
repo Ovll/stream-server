@@ -1,9 +1,9 @@
 import { onCleanup, onMount } from "solid-js";
 import { runtime } from "@/runtime";
 
-type ReloadCatalog = (options?: { silent?: boolean }) => Promise<void>;
+type OnCatalogChanged = () => Promise<void> | void;
 
-export function useCatalogEvents(reloadCatalog: ReloadCatalog) {
+export function useCatalogEvents(onCatalogChanged: OnCatalogChanged) {
   let events: EventSource | null = null;
   let reloadTimer: number | undefined;
 
@@ -13,8 +13,8 @@ export function useCatalogEvents(reloadCatalog: ReloadCatalog) {
     }
 
     reloadTimer = window.setTimeout(() => {
-      void reloadCatalog({ silent: true }).catch(err => {
-        console.error("Failed to reload catalog after SSE event:", err);
+      Promise.resolve(onCatalogChanged()).catch(err => {
+        console.error("Failed to refresh catalog after SSE event:", err);
       });
     }, 500);
   };
