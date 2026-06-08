@@ -31,6 +31,15 @@ npm start
 ```
 
 The server scans `MEDIA_DIR`, watches for file changes, stores metadata in SQLite, and serves the media API.
+The server also sends catalog refresh events to the UI when media files are added, removed, or changed.
+
+## Manual Refresh
+
+If the database was changed manually, notify the UI:
+
+```bash
+curl -s -X POST http://localhost:4000/api/media/catalog/changed | jq
+```
 
 ## UI App
 
@@ -41,6 +50,7 @@ npm run deploy:lg
 ```
 
 `deploy:lg` builds, packages, installs, and launches the LG app.
+The UI listens for server catalog events and refreshes automatically.
 
 Useful UI commands:
 
