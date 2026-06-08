@@ -6,7 +6,7 @@ import { createMediaRouter } from '../media/media.routes.js';
 import { createStreamRouter } from '../stream/stream.routes.js';
 import { createProgressRouter } from '../progress/progress.routes.js';
 import { createMetadataRouter } from '../metadata/metadata.routes.js';
-import { createCatalogEventsRouter } from '../events/catalogEvents.js';
+import { createCatalogEventsRouter, notifyCatalogChanged } from '../events/catalogEvents.js';
 
 export function createServer(options) {
     const {
@@ -41,6 +41,17 @@ export function createServer(options) {
     );
 
     app.get('/api/events', createCatalogEventsRouter());
+
+    app.post('/api/media/catalog/changed', (req, res) => {
+        notifyCatalogChanged('manual-refresh', {
+            source: 'manual-api',
+        });
+
+        res.json({
+            ok: true,
+            reason: 'manual-refresh',
+        });
+    });
 
     // Serve static frontend files from the "public" directory.
     app.use(express.static(publicDir));

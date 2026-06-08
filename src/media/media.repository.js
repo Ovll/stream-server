@@ -91,6 +91,7 @@ export function upsertMediaItem({ type, title, year }) {
             ORDER BY
                 external_source IS NOT NULL DESC,
                 external_id IS NOT NULL DESC,
+                poster_path IS NOT NULL DESC,
                 year IS NOT NULL DESC,
                 id ASC
             LIMIT 1
@@ -103,22 +104,41 @@ export function upsertMediaItem({ type, title, year }) {
         return db.prepare(`SELECT * FROM media_items WHERE id = ?`).get(exactExisting.id);
     }
 
-    // Important fix:
-    // TV filenames often do not include the show year:
-    // Tulsa.King.S02E02... => title "Tulsa King", year NULL
-    //
-    // If the show already exists as a matched TMDB series:
-    // Tulsa King / 2022 / tmdb 153312
-    //
-    // then all new episodes should attach to that existing row.
+    const normalizedExisting = db
+        .prepare(
+            `
+            SELECT *
+            FROM media_items
+            WHERE type = ?
+              AND sort_title = ?
+              AND (
+                    year = ?
+                    OR (year IS NULL AND ? IS NULL)
+                  )
+            ORDER BY
+                external_source IS NOT NULL DESC,
+                external_id IS NOT NULL DESC,
+                poster_path IS NOT NULL DESC,
+                year IS NOT NULL DESC,
+                id ASC
+            LIMIT 1
+            `,
+        )
+        .get(type, sortTitle, normalizedYear, normalizedYear);
+
+    if (normalizedExisting) {
+        updateMediaItemTouch(db, normalizedExisting.id, sortTitle);
+        return db.prepare(`SELECT * FROM media_items WHERE id = ?`).get(normalizedExisting.id);
+    }
+
     if (type === 'series' && normalizedYear === null) {
-        const existingSeriesByTitle = db
+        const existingSeriesBySortTitle = db
             .prepare(
                 `
                 SELECT *
                 FROM media_items
                 WHERE type = 'series'
-                  AND title = ?
+                  AND sort_title = ?
                 ORDER BY
                     external_source IS NOT NULL DESC,
                     external_id IS NOT NULL DESC,
@@ -128,17 +148,14 @@ export function upsertMediaItem({ type, title, year }) {
                 LIMIT 1
                 `,
             )
-            .get(title);
+            .get(sortTitle);
 
-        if (existingSeriesByTitle) {
-            updateMediaItemTouch(db, existingSeriesByTitle.id, sortTitle);
-            return db.prepare(`SELECT * FROM media_items WHERE id = ?`).get(existingSeriesByTitle.id);
+        if (existingSeriesBySortTitle) {
+            updateMediaItemTouch(db, existingSeriesBySortTitle.id, sortTitle);
+            return db.prepare(`SELECT * FROM media_items WHERE id = ?`).get(existingSeriesBySortTitle.id);
         }
     }
 
-    // Also handle the opposite case:
-    // first file created series with NULL year, later filename includes year.
-    // Reuse the existing NULL-year row instead of creating a duplicate.
     if (type === 'series' && normalizedYear !== null) {
         const existingSeriesWithoutYear = db
             .prepare(
@@ -146,7 +163,7 @@ export function upsertMediaItem({ type, title, year }) {
                 SELECT *
                 FROM media_items
                 WHERE type = 'series'
-                  AND title = ?
+                  AND sort_title = ?
                   AND year IS NULL
                 ORDER BY
                     external_source IS NOT NULL DESC,
@@ -156,7 +173,7 @@ export function upsertMediaItem({ type, title, year }) {
                 LIMIT 1
                 `,
             )
-            .get(title);
+            .get(sortTitle);
 
         if (existingSeriesWithoutYear) {
             db.prepare(
@@ -190,7 +207,6 @@ export function upsertMediaItem({ type, title, year }) {
 
     return db.prepare(`SELECT * FROM media_items WHERE id = ?`).get(result.lastInsertRowid);
 }
-
 function updateMediaItemTouch(db, mediaItemId, sortTitle) {
     db.prepare(
         `
@@ -317,10 +333,13 @@ export function listMediaItemsForHome() {
 
 function normalizeSortTitle(title) {
     return String(title || '')
+        .normalize('NFKD')
         .toLowerCase()
-        .replace(/^the\s+/, '')
-        .replace(/^a\s+/, '')
-        .replace(/^an\s+/, '')
+        .replace(/&/g, ' and ')
+        .replace(/['’]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/^(the|a|an)\s+/, '')
+        .replace(/\s+/g, ' ')
         .trim();
 }
 
