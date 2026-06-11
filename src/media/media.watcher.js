@@ -29,7 +29,7 @@ export function startMediaWatcher(mediaDir, options = {}) {
     const watcher = chokidar.watch(mediaDir, {
         ignored: /(^|[/\\])\../,
         persistent: true,
-        depth: 0,
+        depth: 1,
         ignoreInitial: true,
         awaitWriteFinish: {
             stabilityThreshold: 2000,
@@ -39,10 +39,10 @@ export function startMediaWatcher(mediaDir, options = {}) {
 
     watcher
         .on('add', async (filePath) => {
-            await handleAddOrChange(filePath, { enrichMetadata });
+            await handleAddOrChange(filePath, mediaDir, { enrichMetadata });
         })
         .on('change', async (filePath) => {
-            await handleAddOrChange(filePath, { enrichMetadata });
+            await handleAddOrChange(filePath, mediaDir, { enrichMetadata });
         })
         .on('unlink', async (filePath) => {
             await handleUnlinkSafely(filePath);
@@ -57,7 +57,7 @@ export function startMediaWatcher(mediaDir, options = {}) {
     return watcher;
 }
 
-async function handleAddOrChange(filePath, options) {
+async function handleAddOrChange(filePath, mediaDir, options) {
     const extension = path.extname(filePath).toLowerCase();
 
     if (!VIDEO_EXTENSIONS.has(extension)) {
@@ -72,7 +72,9 @@ async function handleAddOrChange(filePath, options) {
         }
 
         const filename = path.basename(filePath);
-        const parsed = parseMediaFilename(filename);
+        const parentDir = path.dirname(filePath);
+        const folderName = parentDir !== mediaDir ? path.basename(parentDir) : null;
+        const parsed = parseMediaFilename(filename, folderName);
 
         const result = upsertMediaFromParsedFile({
             ...parsed,

@@ -1,6 +1,6 @@
 import path from 'path';
 
-export function parseMediaFilename(filename) {
+export function parseMediaFilename(filename, folderName = null) {
     const extension = path.extname(filename);
     const nameWithoutExtension = path.basename(filename, extension);
 
@@ -11,17 +11,20 @@ export function parseMediaFilename(filename) {
     // Important:
     // For TV, a year before S01E01 is often a release year, not part of the title.
     const seriesMatch = nameWithoutExtension.match(
-        /^(.*?)(?:[.\s_-]+(19\d{2}|20\d{2}))?[.\s_-]+S(\d{1,2})E(\d{1,2})(?:[.\s_-]+(.*))?$/i,
+        /^(.*?)(?:[.\s_-]+(19\d{2}|20\d{2}))?[.\s_-]*S(\d{1,2})E(\d{1,2})(?:[.\s_-]+(.*))?$/i,
     );
 
     if (seriesMatch) {
         const rawTitle = seriesMatch[1];
         const rawYear = seriesMatch[2] || null;
         const rawEpisodeTail = seriesMatch[5] || '';
+        // When the filename has no title prefix (e.g. "S01E01.mkv" inside "Breaking Bad/"),
+        // use the folder name as the series title.
+        const resolvedTitle = cleanTitle(rawTitle) || (folderName ? cleanTitle(folderName) : '');
 
         return {
             type: 'series',
-            title: cleanTitle(rawTitle),
+            title: resolvedTitle,
             year: rawYear ? Number(rawYear) : null,
             seasonNumber: Number(seriesMatch[3]),
             episodeNumber: Number(seriesMatch[4]),
