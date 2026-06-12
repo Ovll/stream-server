@@ -5,6 +5,8 @@ import type { EpisodeItem, SeriesItem } from "./types";
 type SeriesDetailsProps = {
   series: SeriesItem;
   focusedEpisodeIndex: number;
+  onEpisodeHover?: (episodeIndex: number) => void;
+  onEpisodeClick?: (episode: EpisodeItem) => void;
 };
 
 const CARD_WIDTH = 330;
@@ -72,7 +74,7 @@ const SeriesDetails = (props: SeriesDetailsProps) => {
         Season 1
       </Text>
 
-      <View x={0} y={130} width={VIEWPORT_WIDTH} height={290}>
+      <View x={0} y={130} width={VIEWPORT_WIDTH} height={330}>
         <For each={visibleEpisodes()}>
           {item => {
             const episode = item.episode;
@@ -80,7 +82,14 @@ const SeriesDetails = (props: SeriesDetailsProps) => {
             const isCompleted = () => episode.completed === 1;
 
             return (
-              <View x={item.x} y={0} width={CARD_WIDTH} height={250}>
+              <View
+                x={item.x}
+                y={0}
+                width={CARD_WIDTH}
+                height={290}
+                onFocus={() => props.onEpisodeHover?.(item.index)}
+                onMouseClick={() => props.onEpisodeClick?.(episode)}
+              >
                 <View
                   width={CARD_WIDTH}
                   height={CARD_HEIGHT}
@@ -107,7 +116,7 @@ const SeriesDetails = (props: SeriesDetailsProps) => {
                   </View>
                 </View>
 
-                <Text x={4} y={202} width={320} fontSize={24} color={isFocused() ? "#ffffff" : "#d1d5db"}>
+                <Text x={4} y={202} width={320} fontSize={24} color={isFocused() ? "#ffffff" : "#d1d5db"} contain="width" maxLines={2}>
                   {getEpisodeTitle(episode)}
                 </Text>
               </View>

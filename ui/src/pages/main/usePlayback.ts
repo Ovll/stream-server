@@ -3,7 +3,7 @@ import { CommonPlayer } from "#devices/common/player";
 import type { PlayTarget } from "./types";
 import { getStreamUrlFromPlayTarget, savePlaybackProgress } from "./mediaApi";
 
-export function usePlayback() {
+export function usePlayback(options: { onEnded?: () => void } = {}) {
   const [isPlaying, setIsPlaying] = createSignal(false);
 
   let player: CommonPlayer | null = null;
@@ -80,6 +80,11 @@ export function usePlayback() {
       setIsPlaying(true);
 
       await nextPlayer.load(streamUrl, true, nextPlayTarget.positionSeconds || 0);
+
+      nextPlayer.onEnded(() => {
+        stopCurrentMedia();
+        options.onEnded?.();
+      });
 
       startProgressTimer();
     } catch (err) {
