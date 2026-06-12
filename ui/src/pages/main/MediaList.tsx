@@ -1,11 +1,13 @@
 import { For, Show } from "solid-js";
 import { View } from "@lightningtv/solid";
-import type { MainRow } from "./types";
+import type { MainCardItem, MainRow } from "./types";
 
 type MediaListProps = {
   rows: MainRow[];
   focusedRowIndex: number;
   focusedItemIndex: number;
+  onItemHover?: (rowIndex: number, itemIndex: number) => void;
+  onItemClick?: (item: MainCardItem) => void;
 };
 
 const CARD_WIDTH = 190;
@@ -28,7 +30,14 @@ const MediaList = (props: MediaListProps) => {
                       rowIndex() === props.focusedRowIndex && itemIndex() === props.focusedItemIndex;
 
                     return (
-                      <View x={itemIndex() * CARD_STEP} y={0} width={CARD_WIDTH} height={350}>
+                      <View
+                        x={itemIndex() * CARD_STEP}
+                        y={0}
+                        width={CARD_WIDTH}
+                        height={350}
+                        onFocus={() => props.onItemHover?.(rowIndex(), itemIndex())}
+                        onMouseClick={() => props.onItemClick?.(item)}
+                      >
                         <View
                           width={CARD_WIDTH}
                           height={CARD_HEIGHT}

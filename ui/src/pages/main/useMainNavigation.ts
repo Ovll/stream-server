@@ -1,6 +1,6 @@
 import { Accessor, createSignal, onCleanup, onMount } from "solid-js";
 import { consumeKeyboardEvent, getRuntimeKeyState } from "@/runtime";
-import type { EpisodeItem, MainRow, ScreenMode, SeriesItem } from "./types";
+import type { EpisodeItem, MainCardItem, MainRow, ScreenMode, SeriesItem } from "./types";
 import { fetchFilePlayTarget, fetchPlayTarget } from "./mediaApi";
 import { usePlayback } from "./usePlayback";
 
@@ -10,14 +10,39 @@ type UseMainNavigationProps = {
 };
 
 export function useMainNavigation(props: UseMainNavigationProps) {
-  const playback = usePlayback();
-
   const [focusedRowIndex, setFocusedRowIndex] = createSignal(0);
   const [focusedItemIndex, setFocusedItemIndex] = createSignal(0);
   const [focusedEpisodeIndex, setFocusedEpisodeIndex] = createSignal(0);
 
   const [screenMode, setScreenMode] = createSignal<ScreenMode>("main");
   const [selectedSeries, setSelectedSeries] = createSignal<SeriesItem | null>(null);
+
+  const reloadCatalogAndRefreshSelectedSeries = async () => {
+    if (!props.reloadCatalog) return;
+
+    const currentSeriesId = selectedSeries()?.id;
+
+    await props.reloadCatalog({ silent: true });
+
+    if (!currentSeriesId) return;
+
+    const updatedSeries = props
+      .rows()
+      .flatMap(row => row.items)
+      .find(item => item.type === "series" && item.id === currentSeriesId);
+
+    if (updatedSeries && updatedSeries.type === "series") {
+      setSelectedSeries(updatedSeries);
+    }
+  };
+
+  const playback = usePlayback({
+    onEnded: () => {
+      void reloadCatalogAndRefreshSelectedSeries().catch(err => {
+        console.error("Failed to reload catalog after playback ended:", err);
+      });
+    },
+  });
 
   const getFocusedItem = () => {
     const row = props.rows()[focusedRowIndex()];
@@ -54,25 +79,6 @@ export function useMainNavigation(props: UseMainNavigationProps) {
 
     const maxItemIndex = Math.max(0, row.items.length - 1);
     setFocusedItemIndex(prev => Math.min(prev, maxItemIndex));
-  };
-
-  const reloadCatalogAndRefreshSelectedSeries = async () => {
-    if (!props.reloadCatalog) return;
-
-    const currentSeriesId = selectedSeries()?.id;
-
-    await props.reloadCatalog({ silent: true });
-
-    if (!currentSeriesId) return;
-
-    const updatedSeries = props
-      .rows()
-      .flatMap(row => row.items)
-      .find(item => item.type === "series" && item.id === currentSeriesId);
-
-    if (updatedSeries && updatedSeries.type === "series") {
-      setSelectedSeries(updatedSeries);
-    }
   };
 
   const moveRow = (direction: number) => {
@@ -291,6 +297,35 @@ export function useMainNavigation(props: UseMainNavigationProps) {
     }
   };
 
+  const focusMainItem = (rowIndex: number, itemIndex: number) => {
+    setFocusedRowIndex(rowIndex);
+    setFocusedItemIndex(itemIndex);
+  };
+
+  const activateMainItem = (item: MainCardItem) => {
+    if (item.type === "series") {
+      openSeriesDetails(item);
+      return;
+    }
+
+    void fetchPlayTarget(item.id)
+      .then(playTarget => playback.playTarget(playTarget))
+      .catch(err => {
+        console.error("Failed to play clicked item:", err);
+      });
+  };
+
+  const focusEpisode = (episodeIndex: number) => {
+    setFocusedEpisodeIndex(episodeIndex);
+  };
+
+  const activateEpisode = (episode: EpisodeItem) => {
+    const series = selectedSeries();
+    if (!series) return;
+
+    void playEpisode(series, episode);
+  };
+
   const handleKeyDown = (event: KeyboardEvent) => {
     if (playback.isPlaying()) {
       handlePlayingKeyDown(event);
@@ -324,5 +359,10 @@ export function useMainNavigation(props: UseMainNavigationProps) {
     isPlaying: playback.isPlaying,
 
     reloadCatalogAndRefreshSelectedSeries,
+
+    focusMainItem,
+    activateMainItem,
+    focusEpisode,
+    activateEpisode,
   };
 }

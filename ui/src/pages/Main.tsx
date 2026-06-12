@@ -34,12 +34,19 @@ const Main = () => {
                   rows={rows()}
                   focusedRowIndex={navigation.focusedRowIndex()}
                   focusedItemIndex={navigation.focusedItemIndex()}
+                  onItemHover={navigation.focusMainItem}
+                  onItemClick={navigation.activateMainItem}
                 />
               </>
             }
           >
             {series => (
-              <SeriesDetails series={series()} focusedEpisodeIndex={navigation.focusedEpisodeIndex()} />
+              <SeriesDetails
+                series={series()}
+                focusedEpisodeIndex={navigation.focusedEpisodeIndex()}
+                onEpisodeHover={navigation.focusEpisode}
+                onEpisodeClick={navigation.activateEpisode}
+              />
             )}
           </Show>
         }

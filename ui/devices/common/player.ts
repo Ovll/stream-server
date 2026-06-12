@@ -12,6 +12,7 @@ export interface Player {
   seek(time: number): void;
   setVolume(volume: number): void;
   adjustVolume(amount: number): void;
+  onEnded(callback: (() => void) | null): void;
 }
 
 export class CommonPlayer implements Player {
@@ -19,6 +20,7 @@ export class CommonPlayer implements Player {
   private _videoElement: HTMLVideoElement;
   private _currentUrl: string | null = null;
   private _isDestroyed = false;
+  private _endedHandler: (() => void) | null = null;
 
   constructor(videoElement?: HTMLVideoElement) {
     this._videoElement = videoElement || this.createVideoElement();
@@ -195,6 +197,7 @@ export class CommonPlayer implements Player {
   }
 
   stop(): void {
+    this.onEnded(null);
     this._videoElement.pause();
 
     if (this._player) {
@@ -205,6 +208,18 @@ export class CommonPlayer implements Player {
 
     this._currentUrl = null;
     this.hideVideo();
+  }
+
+  onEnded(callback: (() => void) | null): void {
+    if (this._endedHandler) {
+      this._videoElement.removeEventListener("ended", this._endedHandler);
+      this._endedHandler = null;
+    }
+
+    if (callback) {
+      this._endedHandler = callback;
+      this._videoElement.addEventListener("ended", this._endedHandler);
+    }
   }
 
   async destroy(): Promise<void> {

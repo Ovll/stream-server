@@ -30,25 +30,38 @@ export async function scanMediaFolder(mediaDir, options = {}) {
         };
     }
 
-    const files = await fs.promises.readdir(mediaDir);
+    const entries = await fs.promises.readdir(mediaDir, { withFileTypes: true });
 
-    const videoFiles = files.filter((file) =>
-        VIDEO_EXTENSIONS.includes(path.extname(file).toLowerCase()),
-    );
+    const toScan = [];
+
+    for (const entry of entries) {
+        if (entry.isFile()) {
+            if (VIDEO_EXTENSIONS.includes(path.extname(entry.name).toLowerCase())) {
+                toScan.push({ filename: entry.name, absolutePath: path.join(mediaDir, entry.name), folderName: null });
+            }
+        } else if (entry.isDirectory()) {
+            const subdirPath = path.join(mediaDir, entry.name);
+            const subdirEntries = await fs.promises.readdir(subdirPath, { withFileTypes: true });
+            for (const sub of subdirEntries) {
+                if (sub.isFile() && VIDEO_EXTENSIONS.includes(path.extname(sub.name).toLowerCase())) {
+                    toScan.push({ filename: sub.name, absolutePath: path.join(subdirPath, sub.name), folderName: entry.name });
+                }
+            }
+        }
+    }
 
     const items = [];
     const seenAbsolutePaths = [];
     const mediaItemIdsToEnrich = new Set();
 
-    for (const filename of videoFiles) {
-        const absolutePath = path.join(mediaDir, filename);
+    for (const { filename, absolutePath, folderName } of toScan) {
         const stat = await fs.promises.stat(absolutePath);
 
         if (!stat.isFile()) continue;
 
         seenAbsolutePaths.push(absolutePath);
 
-        const parsed = parseMediaFilename(filename);
+        const parsed = parseMediaFilename(filename, folderName);
 
         const result = upsertMediaFromParsedFile({
             ...parsed,
