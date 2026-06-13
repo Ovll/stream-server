@@ -183,7 +183,7 @@ export function useMainNavigation(props: UseMainNavigationProps) {
       return;
     }
 
-    if (key.playPause || key.enter) {
+    if (key.playPause) {
       consumeKeyboardEvent(event);
       playback.togglePlayPause();
       return;
