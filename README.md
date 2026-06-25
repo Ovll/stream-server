@@ -1,5 +1,7 @@
 # Stream Server Setup
 
+![CI](https://github.com/Ovll/stream-server/actions/workflows/ci.yml/badge.svg?branch=main)
+
 ## Requirements
 
 - Node.js
