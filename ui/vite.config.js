@@ -15,6 +15,11 @@ export default defineConfig(({ mode }) => {
     envDir: "./environments",
     define: {
       __DEV__: mode !== "production",
+      __SERVER_BASE__: JSON.stringify(
+        isLg
+          ? (process.env.VITE_SERVER_BASE || "http://192.168.1.22:4000")
+          : ""
+      ),
     },
     plugins: [
       deviceConfigPlugin(targetDevice),

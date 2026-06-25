@@ -96,12 +96,17 @@ async function startServerProcess() {
     const serverPath = getServerPath();
     const nodeBin = findNode();
 
+    const webUiDir = app.isPackaged
+        ? path.join(process.resourcesPath, 'server', 'ui', 'dist', 'web')
+        : path.join(__dirname, '..', 'ui', 'dist', 'common');
+
     const env = {
         ...process.env,
         PORT: String(port),
         MEDIA_DIR: config.mediaDir,
         DB_PATH: config.dbPath,
         APP_CONFIG_PATH: CONFIG_PATH,
+        PUBLIC_DIR: webUiDir,
     };
     if (config.tmdbApiKey) env.TMDB_API_KEY = config.tmdbApiKey;
 

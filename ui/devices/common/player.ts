@@ -1,5 +1,7 @@
 import shaka from "shaka-player";
 
+shaka.polyfill.installAll();
+
 export interface Player {
   isPaused(): boolean;
   getDuration(): number;

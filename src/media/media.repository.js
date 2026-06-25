@@ -34,6 +34,7 @@ export function upsertMediaFromParsedFile(fileInfo) {
                 seasonNumber: fileInfo.seasonNumber,
                 episodeNumber: fileInfo.episodeNumber,
                 episodeTitle: existingFile.episode_title || fileInfo.episodeTitle,
+                codec: fileInfo.codec,
             });
 
             return {
@@ -57,6 +58,7 @@ export function upsertMediaFromParsedFile(fileInfo) {
             seasonNumber: fileInfo.seasonNumber,
             episodeNumber: fileInfo.episodeNumber,
             episodeTitle: fileInfo.episodeTitle,
+            codec: fileInfo.codec,
         });
 
         return {
@@ -225,6 +227,7 @@ export function upsertMediaFile({
     seasonNumber,
     episodeNumber,
     episodeTitle,
+    codec = null,
 }) {
     const db = getDatabase();
 
@@ -250,6 +253,7 @@ export function upsertMediaFile({
                 season_number = ?,
                 episode_number = ?,
                 episode_title = ?,
+                codec = COALESCE(?, codec),
                 last_seen_at = CURRENT_TIMESTAMP
             WHERE id = ?
             `,
@@ -261,6 +265,7 @@ export function upsertMediaFile({
             seasonNumber,
             episodeNumber,
             episodeTitle,
+            codec,
             existing.id,
         );
 
@@ -278,9 +283,10 @@ export function upsertMediaFile({
                 size_bytes,
                 season_number,
                 episode_number,
-                episode_title
+                episode_title,
+                codec
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
         )
         .run(
@@ -292,6 +298,7 @@ export function upsertMediaFile({
             seasonNumber,
             episodeNumber,
             episodeTitle,
+            codec,
         );
 
     return db.prepare(`SELECT * FROM media_files WHERE id = ?`).get(result.lastInsertRowid);
@@ -723,8 +730,16 @@ function toPlayTarget(mediaItem, file) {
         durationSeconds: file.duration_seconds || null,
         completed: file.completed || 0,
 
-        streamUrl: `/stream/direct/${file.id}`,
+        streamUrl: needsTranscode(file.codec)
+            ? `/stream/hls/${file.id}/playlist.m3u8`
+            : `/stream/direct/${file.id}`,
     };
+}
+
+function needsTranscode(codec) {
+    // Browser-incompatible codecs: transcode to H.264 on the fly.
+    // hevc (H.265) is not supported in Chrome/Firefox.
+    return codec === 'hevc' || codec === 'h265';
 }
 
 function buildCachedImageUrl(kind, filePath, size = 'w500') {

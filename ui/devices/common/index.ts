@@ -25,10 +25,8 @@ export const config = {
       fontEngines: [SdfTextRenderer],
       renderEngine: WebGlCoreRenderer,
       inspector: import.meta.env.DEV ? Inspector : undefined,
-      // 720p = 0.666667, 1080p = 1, 1440p = 1.5, 2160p = 2
-      // Also set this to 0.8 to increase performance if 1 is struggling during animations
-      deviceLogicalPixelRatio: 1,
-      devicePhysicalPixelRatio: 1,
+      deviceLogicalPixelRatio: Math.min(window.innerWidth / 1920, window.innerHeight / 1080),
+      devicePhysicalPixelRatio: window.devicePixelRatio || 1,
       // Increase to preload images coming from offscreen
       boundsMargin: 200,
       createImageBitmapSupport: "auto",

@@ -9,6 +9,7 @@
     "start:prod": "vite --open --host --force --mode production",
     "build": "vite build",
     "build:lg": "TARGET_DEVICE=lg vite build && node scripts/postbuild-lg.cjs",
+    "build:web": "TARGET_DEVICE=common vite build",
     "build:lg:debug": "TARGET_DEVICE=lg vite build --sourcemap=true && node scripts/postbuild-lg.cjs",
     "build:analyze": "vite-bundle-visualizer",
     "package:lg": "rm -f com.streamserver.app_1.0.0_all.ipk && npm run build:lg && ares-package --no-minify -o . dist/lg",

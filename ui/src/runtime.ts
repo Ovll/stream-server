@@ -8,7 +8,9 @@ export const runtime = {
   isLg: config.name === "lg",
   isTizen: config.name === "tizen",
 
-  serverBase: "http://192.168.1.22:4000",
+  serverBase: (typeof __SERVER_BASE__ !== "undefined" && __SERVER_BASE__)
+    ? __SERVER_BASE__
+    : window.location.origin,
 };
 
 export function keyMatches(event: KeyboardEvent, value: unknown) {

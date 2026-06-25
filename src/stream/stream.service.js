@@ -61,31 +61,47 @@ export function streamDirectFile(req, res, videoPath) {
     fs.createReadStream(videoPath).pipe(res);
 }
 
-export function streamTranscodedFile(res, videoPath) {
+export function streamTranscodedFile(res, videoPath, sourceCodec = null) {
     if (typeof videoPath !== 'string' || !fs.existsSync(videoPath)) {
         return res.status(404).send('Video file not found.');
     }
 
+    const videoCodec = sourceCodec === 'h264' ? 'copy' : 'libx264';
+
     res.writeHead(200, {
         'Content-Type': 'video/mp4',
         'Transfer-Encoding': 'chunked',
+        'Accept-Ranges': 'none',
+        'X-Content-Duration': '0',
     });
 
-    ffmpeg(videoPath)
-        .videoCodec('libx264')
-        .audioCodec('aac')
-        .format('mp4')
-        .outputOptions([
-            '-movflags frag_keyframe+empty_moov',
+    const outputOptions = [
+        '-movflags frag_keyframe+empty_moov',
+        '-map 0:v:0',
+        '-map 0:a:0?',
+        '-ac 2',
+    ];
+    if (videoCodec === 'libx264') {
+        outputOptions.push(
             '-preset ultrafast',
             '-tune zerolatency',
-        ])
-        .on('error', (err) => {
-            console.error('FFmpeg transcoding error:', err.message);
+            '-profile:v baseline',
+            '-level 3.1',
+        );
+    }
 
-            if (!res.headersSent) {
-                res.status(500).send('FFmpeg transcoding error');
+    const command = ffmpeg(videoPath)
+        .videoCodec(videoCodec)
+        .audioCodec('aac')
+        .format('mp4')
+        .outputOptions(outputOptions)
+        .on('error', (err) => {
+            if (!err.message.includes('Output stream closed') && !err.message.includes('SIGKILL')) {
+                console.error('FFmpeg transcoding error:', err.message);
             }
-        })
-        .pipe(res, { end: true });
+        });
+
+    command.pipe(res, { end: true });
+
+    res.on('close', () => command.kill('SIGKILL'));
 }
