@@ -77,4 +77,5 @@ export interface PlayTarget {
   durationSeconds: number | null;
   completed: number;
   streamUrl: string;
+  codec: string | null;
 }

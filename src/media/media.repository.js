@@ -730,9 +730,8 @@ function toPlayTarget(mediaItem, file) {
         durationSeconds: file.duration_seconds || null,
         completed: file.completed || 0,
 
-        streamUrl: needsTranscode(file.codec)
-            ? `/stream/hls/${file.id}/playlist.m3u8`
-            : `/stream/direct/${file.id}`,
+        streamUrl: `/stream/direct/${file.id}`,
+        codec: file.codec || null,
     };
 }
 

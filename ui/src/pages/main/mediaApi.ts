@@ -64,6 +64,12 @@ export async function savePlaybackProgress(input: {
 }
 
 export function getStreamUrlFromPlayTarget(playTarget: PlayTarget): string {
+  const needsHls =
+    !runtime.isLg &&
+    (playTarget.codec === 'hevc' || playTarget.codec === 'h265');
+  if (needsHls) {
+    return toAbsoluteServerUrl(`/stream/hls/${playTarget.mediaFileId}/playlist.m3u8`);
+  }
   return toAbsoluteServerUrl(playTarget.streamUrl);
 }
 
