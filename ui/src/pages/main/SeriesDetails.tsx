@@ -4,6 +4,7 @@ import type { EpisodeItem, SeriesItem } from "./types";
 
 type SeriesDetailsProps = {
   series: SeriesItem;
+  focusedSeasonIndex: number;
   focusedEpisodeIndex: number;
   onEpisodeHover?: (episodeIndex: number) => void;
   onEpisodeClick?: (episode: EpisodeItem) => void;
@@ -38,7 +39,8 @@ function getEpisodeTitle(episode: EpisodeItem) {
 }
 
 const SeriesDetails = (props: SeriesDetailsProps) => {
-  const episodes = () => props.series.seasons.flatMap(season => season.episodes);
+  const season = () => props.series.seasons[props.focusedSeasonIndex];
+  const episodes = () => season()?.episodes ?? [];
 
   const carouselOffset = () => {
     const focusIndex = props.focusedEpisodeIndex;
@@ -71,7 +73,7 @@ const SeriesDetails = (props: SeriesDetailsProps) => {
       </Text>
 
       <Text x={0} y={70} fontSize={28} color="#9ca3af">
-        Season 1
+        {`Season ${season()?.seasonNumber ?? 1}${props.series.seasons.length > 1 ? ` / ${props.series.seasons.length}` : ""}`}
       </Text>
 
       <View x={0} y={130} width={VIEWPORT_WIDTH} height={330}>

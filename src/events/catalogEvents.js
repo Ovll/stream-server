@@ -63,6 +63,12 @@ function broadcastCatalogChanged(reason, details) {
     console.log(`Catalog change event sent to ${clients.size} client(s): ${reason}`);
 }
 
+export function broadcastServerEvent(eventName, data = {}) {
+    for (const client of clients) {
+        sendEvent(client.res, eventName, { ...data, at: new Date().toISOString() });
+    }
+}
+
 function sendEvent(res, eventName, data) {
     res.write(`event: ${eventName}\n`);
     res.write(`data: ${JSON.stringify(data)}\n\n`);

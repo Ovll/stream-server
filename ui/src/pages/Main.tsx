@@ -43,6 +43,7 @@ const Main = () => {
             {series => (
               <SeriesDetails
                 series={series()}
+                focusedSeasonIndex={navigation.focusedSeasonIndex()}
                 focusedEpisodeIndex={navigation.focusedEpisodeIndex()}
                 onEpisodeHover={navigation.focusEpisode}
                 onEpisodeClick={navigation.activateEpisode}

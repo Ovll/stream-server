@@ -1,0 +1,40 @@
+{
+  "name": "stream-server-desktop",
+  "version": "1.0.0",
+  "description": "Stream Server menu bar app for Mac",
+  "main": "main.js",
+  "scripts": {
+    "prepare": "mkdir -p assets && sips -z 28 28 ../ui/devices/lg/icon.png --out assets/icon.png",
+    "start": "electron .",
+    "build": "electron-builder --mac --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.streamserver.desktop",
+    "productName": "Stream Server",
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] }
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.video"
+    },
+    "files": ["main.js", "assets/**"],
+    "extraResources": [
+      {
+        "from": "../",
+        "to": "server",
+        "filter": [
+          "server.js",
+          "src/**",
+          "package.json",
+          "node_modules/**",
+          "public/**"
+        ]
+      }
+    ]
+  }
+}

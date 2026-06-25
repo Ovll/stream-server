@@ -29,7 +29,7 @@ export function startMediaWatcher(mediaDir, options = {}) {
     const watcher = chokidar.watch(mediaDir, {
         ignored: /(^|[/\\])\../,
         persistent: true,
-        depth: 1,
+        depth: 2,
         ignoreInitial: true,
         awaitWriteFinish: {
             stabilityThreshold: 2000,
@@ -72,8 +72,8 @@ async function handleAddOrChange(filePath, mediaDir, options) {
         }
 
         const filename = path.basename(filePath);
-        const parentDir = path.dirname(filePath);
-        const folderName = parentDir !== mediaDir ? path.basename(parentDir) : null;
+        const relDir = path.relative(mediaDir, path.dirname(filePath));
+        const folderName = relDir && relDir !== '.' ? relDir.split(path.sep)[0] : null;
         const parsed = parseMediaFilename(filename, folderName);
 
         const result = upsertMediaFromParsedFile({

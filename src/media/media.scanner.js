@@ -45,6 +45,14 @@ export async function scanMediaFolder(mediaDir, options = {}) {
             for (const sub of subdirEntries) {
                 if (sub.isFile() && VIDEO_EXTENSIONS.includes(path.extname(sub.name).toLowerCase())) {
                     toScan.push({ filename: sub.name, absolutePath: path.join(subdirPath, sub.name), folderName: entry.name });
+                } else if (sub.isDirectory()) {
+                    const seasonPath = path.join(subdirPath, sub.name);
+                    const seasonEntries = await fs.promises.readdir(seasonPath, { withFileTypes: true });
+                    for (const ep of seasonEntries) {
+                        if (ep.isFile() && VIDEO_EXTENSIONS.includes(path.extname(ep.name).toLowerCase())) {
+                            toScan.push({ filename: ep.name, absolutePath: path.join(seasonPath, ep.name), folderName: entry.name });
+                        }
+                    }
                 }
             }
         }
@@ -86,7 +94,7 @@ export async function scanMediaFolder(mediaDir, options = {}) {
     }
 
     return {
-        scanned: videoFiles.length,
+        scanned: toScan.length,
         insertedOrUpdated: items.length,
         removedMissingFiles: cleanup.removedMissingFiles,
         removedEmptyItems: cleanup.removedEmptyItems,

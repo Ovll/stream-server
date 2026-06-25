@@ -12,6 +12,7 @@ type UseMainNavigationProps = {
 export function useMainNavigation(props: UseMainNavigationProps) {
   const [focusedRowIndex, setFocusedRowIndex] = createSignal(0);
   const [focusedItemIndex, setFocusedItemIndex] = createSignal(0);
+  const [focusedSeasonIndex, setFocusedSeasonIndex] = createSignal(0);
   const [focusedEpisodeIndex, setFocusedEpisodeIndex] = createSignal(0);
 
   const [screenMode, setScreenMode] = createSignal<ScreenMode>("main");
@@ -55,7 +56,8 @@ export function useMainNavigation(props: UseMainNavigationProps) {
     const series = selectedSeries();
     if (!series) return [];
 
-    return series.seasons.flatMap(season => season.episodes);
+    const season = series.seasons[focusedSeasonIndex()];
+    return season?.episodes ?? [];
   };
 
   const getFocusedEpisode = () => {
@@ -104,6 +106,17 @@ export function useMainNavigation(props: UseMainNavigationProps) {
     setFocusedItemIndex(prev => Math.max(0, Math.min(row.items.length - 1, prev + direction)));
   };
 
+  const moveSeason = (direction: number) => {
+    const series = selectedSeries();
+    if (!series || series.seasons.length === 0) return;
+
+    setFocusedSeasonIndex(prev => {
+      const next = Math.max(0, Math.min(series.seasons.length - 1, prev + direction));
+      if (next !== prev) setFocusedEpisodeIndex(0);
+      return next;
+    });
+  };
+
   const moveEpisode = (direction: number) => {
     const episodes = getSelectedSeriesEpisodes();
     if (episodes.length === 0) return;
@@ -113,6 +126,7 @@ export function useMainNavigation(props: UseMainNavigationProps) {
 
   const openSeriesDetails = (series: SeriesItem) => {
     setSelectedSeries(series);
+    setFocusedSeasonIndex(0);
     setFocusedEpisodeIndex(0);
     setScreenMode("seriesDetails");
 
@@ -136,6 +150,7 @@ export function useMainNavigation(props: UseMainNavigationProps) {
   const closeSeriesDetails = () => {
     setScreenMode("main");
     setSelectedSeries(null);
+    setFocusedSeasonIndex(0);
     setFocusedEpisodeIndex(0);
 
     void props.reloadCatalog?.({ silent: true }).catch(err => {
@@ -273,6 +288,18 @@ export function useMainNavigation(props: UseMainNavigationProps) {
       return;
     }
 
+    if (key.up) {
+      consumeKeyboardEvent(event);
+      moveSeason(-1);
+      return;
+    }
+
+    if (key.down) {
+      consumeKeyboardEvent(event);
+      moveSeason(1);
+      return;
+    }
+
     if (key.left) {
       consumeKeyboardEvent(event);
       moveEpisode(-1);
@@ -351,6 +378,7 @@ export function useMainNavigation(props: UseMainNavigationProps) {
   return {
     focusedRowIndex,
     focusedItemIndex,
+    focusedSeasonIndex,
     focusedEpisodeIndex,
 
     screenMode,

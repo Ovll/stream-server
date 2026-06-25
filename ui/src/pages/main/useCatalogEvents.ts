@@ -25,10 +25,16 @@ export function useCatalogEvents(onCatalogChanged: OnCatalogChanged) {
       return;
     }
 
+    let hadError = false;
+
     events = new EventSource(`${runtime.serverBase}/api/events`);
 
-    events.addEventListener("connected", event => {
-      console.log("Catalog events connected:", event);
+    events.addEventListener("connected", () => {
+      if (hadError) {
+        hadError = false;
+        console.log("Catalog events reconnected — reloading catalog.");
+        scheduleReload();
+      }
     });
 
     events.addEventListener("catalog-changed", event => {
@@ -38,6 +44,7 @@ export function useCatalogEvents(onCatalogChanged: OnCatalogChanged) {
 
     events.onerror = err => {
       console.warn("Catalog events connection error:", err);
+      hadError = true;
     };
   });
 

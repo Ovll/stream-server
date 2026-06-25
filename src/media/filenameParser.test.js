@@ -47,6 +47,42 @@ describe('parseMediaFilename', () => {
         });
     });
 
+    describe('series — episode title before SxxExx', () => {
+        it('strips episode title prefix and year from title', () => {
+            const result = parseMediaFilename(
+                'The IT Crowd 2006 The Work Outing S02E01 1080p WEB-DL HEVC x265 BONE.mkv',
+            );
+            assert.equal(result.type, 'series');
+            assert.equal(result.title, 'The IT Crowd');
+            assert.equal(result.year, 2006);
+            assert.equal(result.seasonNumber, 2);
+            assert.equal(result.episodeNumber, 1);
+        });
+
+        it('handles multiple words of episode prefix before SxxExx', () => {
+            const result = parseMediaFilename(
+                'The IT Crowd 2006 Jen the Fredo S04E01 1080p WEB-DL HEVC x265 BONE.mkv',
+            );
+            assert.equal(result.title, 'The IT Crowd');
+            assert.equal(result.year, 2006);
+            assert.equal(result.seasonNumber, 4);
+            assert.equal(result.episodeNumber, 1);
+        });
+    });
+
+    describe('series — season without episode number', () => {
+        it('defaults episodeNumber to 1 when only Sxx is present', () => {
+            const result = parseMediaFilename(
+                'The IT Crowd 2006 S05 The Internet is Coming 1080p WEB-DL HEVC x265 BONE.mkv',
+            );
+            assert.equal(result.type, 'series');
+            assert.equal(result.title, 'The IT Crowd');
+            assert.equal(result.year, 2006);
+            assert.equal(result.seasonNumber, 5);
+            assert.equal(result.episodeNumber, 1);
+        });
+    });
+
     describe('movies', () => {
         it('parses title and year', () => {
             const result = parseMediaFilename('The.Batman.2022.mkv');

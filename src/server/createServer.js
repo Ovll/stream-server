@@ -7,6 +7,7 @@ import { createStreamRouter } from '../stream/stream.routes.js';
 import { createProgressRouter } from '../progress/progress.routes.js';
 import { createMetadataRouter } from '../metadata/metadata.routes.js';
 import { createCatalogEventsRouter, notifyCatalogChanged } from '../events/catalogEvents.js';
+import { createSettingsRouter } from '../settings/settings.routes.js';
 
 export function createServer(options) {
     const {
@@ -66,6 +67,9 @@ export function createServer(options) {
 
     // Video streaming API.
     app.use('/stream', createStreamRouter());
+
+    // Desktop app settings page (GET/POST /settings).
+    app.use('/settings', createSettingsRouter());
 
     return app;
 }

@@ -17,19 +17,16 @@ export function upsertMediaFromParsedFile(fileInfo) {
             .get(fileInfo.absolutePath);
 
         if (existingFile) {
-            const mediaItem = db
-                .prepare(
-                    `
-                    SELECT *
-                    FROM media_items
-                    WHERE id = ?
-                    LIMIT 1
-                    `,
-                )
-                .get(existingFile.media_item_id);
+            // Re-evaluate the media item using fresh parsed data so that if the parser
+            // produces a better title the file is re-assigned to the correct item.
+            const mediaItem = upsertMediaItem({
+                type: fileInfo.type,
+                title: fileInfo.title,
+                year: fileInfo.year,
+            });
 
             const mediaFile = upsertMediaFile({
-                mediaItemId: existingFile.media_item_id,
+                mediaItemId: mediaItem.id,
                 absolutePath: fileInfo.absolutePath,
                 filename: fileInfo.filename,
                 extension: fileInfo.extension,
