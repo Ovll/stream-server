@@ -5,7 +5,7 @@ import ffmpeg from 'fluent-ffmpeg';
 
 const HLS_BASE = path.join(os.tmpdir(), 'stream-hls');
 const SEGMENT_DURATION = 4;
-const IDLE_CLEANUP_MS = 5 * 60 * 1000; // 5 min
+const IDLE_CLEANUP_MS = 60 * 1000; // 1 min
 
 // sessions: mediaFileId -> { command, dir, lastAccess, ready: Promise }
 const sessions = new Map();
@@ -109,9 +109,9 @@ export async function getHlsPlaylist(mediaFileId, videoPath, sourceCodec) {
     await session.ready;
 
     const raw = fs.readFileSync(path.join(session.dir, 'playlist.m3u8'), 'utf8');
-    // Rewrite absolute segment paths to bare filenames so the browser requests them
-    // relative to the playlist URL (e.g. seg0.ts → GET /stream/hls/1/seg0.ts).
-    const playlist = raw.replace(/^(\/[^\n]+\.ts)$/gm, (_, p) => path.basename(p));
+    const playlist = raw
+        .replace(/^(\/[^\n]+\.ts)$/gm, (_, p) => path.basename(p))
+        .replace(/(#EXT-X-VERSION:\d+\n)/, '$1#EXT-X-PLAYLIST-TYPE:EVENT\n');
     return playlist;
 }
 

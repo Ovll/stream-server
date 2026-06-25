@@ -1,5 +1,6 @@
 import { createServer } from './createServer.js';
 import { startMediaWatcher } from '../media/media.watcher.js';
+import { destroyAllSessions } from '../stream/hls.service.js';
 
 export function startServer(options) {
     const {
@@ -32,7 +33,10 @@ export function startServer(options) {
             console.log(`Watching media dir: ${mediaDir}`);
         }
     });
+    destroyAllSessions();
+
     httpServer.on('close', async () => {
+        destroyAllSessions();
         if (mediaWatcher) {
             await mediaWatcher.close();
             mediaWatcher = null;

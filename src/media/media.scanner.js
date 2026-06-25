@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import ffmpeg from 'fluent-ffmpeg';
 
 import { getDatabase } from '../db/database.js';
 import {
@@ -9,16 +8,6 @@ import {
 } from '../metadata/metadata.service.js';
 import { parseMediaFilename } from './filenameParser.js';
 import { upsertMediaFromParsedFile } from './media.repository.js';
-
-function probeVideoCodec(filePath) {
-    return new Promise((resolve) => {
-        ffmpeg.ffprobe(filePath, (err, metadata) => {
-            if (err) { resolve(null); return; }
-            const stream = metadata?.streams?.find(s => s.codec_type === 'video');
-            resolve(stream?.codec_name || null);
-        });
-    });
-}
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.webm'];
 
@@ -81,14 +70,12 @@ export async function scanMediaFolder(mediaDir, options = {}) {
         seenAbsolutePaths.push(absolutePath);
 
         const parsed = parseMediaFilename(filename, folderName);
-        const codec = await probeVideoCodec(absolutePath);
 
         const result = upsertMediaFromParsedFile({
             ...parsed,
             filename,
             absolutePath,
             sizeBytes: stat.size,
-            codec,
         });
 
         items.push(result);
