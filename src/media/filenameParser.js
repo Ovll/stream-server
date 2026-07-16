@@ -44,6 +44,50 @@ export function parseMediaFilename(filename, folderName = null) {
         };
     }
 
+    // Russian numbered releases:
+    // 01. История его служанки.2026.WEB-DL 1080p.Files-x.mkv
+    // 02. История его служанки.2026.WEB-DL 1080p.Files-x.mkv
+    const russianEpisodeMatch = nameWithoutExtension.match(
+        /^(\d{1,3})\.\s*(.+?)[.\s_-]+(19\d{2}|20\d{2})(?:[.\s_-].*)?$/u,
+    );
+
+    if (russianEpisodeMatch) {
+        return {
+            type: 'series',
+            title: cleanTitle(russianEpisodeMatch[2]),
+            year: Number(russianEpisodeMatch[3]),
+            seasonNumber: 1,
+            episodeNumber: Number(russianEpisodeMatch[1]),
+            episodeTitle: null,
+            extension,
+        };
+    }
+
+    // Anime / fansub releases:
+    // [AniPlague] Jujutsu Kaisen - 02 [1080p].mkv
+    // [SubsPlease] Solo Leveling - 05 (1080p).mkv
+    const animeEpisodeMatch = nameWithoutExtension.match(
+        /^\[[^\]]+\]\s*(.+?)\s*-\s*(\d{1,4})(?:\s+(?:END|FIN|FINAL))?(?:\s*[\[(].*)?$/iu,
+    );
+
+    if (animeEpisodeMatch) {
+        const folderSeasonMatch = String(folderName || '').match(
+            /\bS(\d{1,2})\b/i,
+        );
+
+        return {
+            type: 'series',
+            title: cleanTitle(animeEpisodeMatch[1]),
+            year: null,
+            seasonNumber: folderSeasonMatch
+                ? Number(folderSeasonMatch[1])
+                : 1,
+            episodeNumber: Number(animeEpisodeMatch[2]),
+            episodeTitle: null,
+            extension,
+        };
+    }
+
     const movieYearMatch = nameWithoutExtension.match(
         /^(.*?)[.\s_-]+(19\d{2}|20\d{2})(?:[.\s_-]|$)/,
     );

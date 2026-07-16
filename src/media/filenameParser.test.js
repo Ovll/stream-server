@@ -97,4 +97,76 @@ describe('parseMediaFilename', () => {
             assert.equal(result.title, 'Interstellar');
         });
     });
+
+    describe('Russian numbered releases', () => {
+        it('parses episode 1', () => {
+            const result = parseMediaFilename(
+                '01. История его служанки.2026.WEB-DL 1080p.Files-x.mkv',
+            );
+
+            assert.equal(result.type, 'series');
+            assert.equal(result.title, 'История его служанки');
+            assert.equal(result.year, 2026);
+            assert.equal(result.seasonNumber, 1);
+            assert.equal(result.episodeNumber, 1);
+        });
+
+        it('parses episode 2', () => {
+            const result = parseMediaFilename(
+                '02. История его служанки.2026.WEB-DL 1080p.Files-x.mkv',
+            );
+
+            assert.equal(result.episodeNumber, 2);
+        });
+    });
+
+    describe('anime fansub releases', () => {
+        it('parses title and episode from fansub filename and season from folder', () => {
+            const result = parseMediaFilename(
+                '[AniPlague] Jujutsu Kaisen - 02 [1080p].mkv',
+                'Jujutsu Kaisen S01 AniPlague',
+            );
+
+            assert.equal(result.type, 'series');
+            assert.equal(result.title, 'Jujutsu Kaisen');
+            assert.equal(result.year, null);
+            assert.equal(result.seasonNumber, 1);
+            assert.equal(result.episodeNumber, 2);
+            assert.equal(result.episodeTitle, null);
+        });
+
+        it('defaults to season 1 when the folder has no season number', () => {
+            const result = parseMediaFilename(
+                '[SubsPlease] Solo Leveling - 05 (1080p).mkv',
+                'Solo Leveling',
+            );
+
+            assert.equal(result.type, 'series');
+            assert.equal(result.title, 'Solo Leveling');
+            assert.equal(result.seasonNumber, 1);
+            assert.equal(result.episodeNumber, 5);
+        });
+
+        it('supports large anime episode numbers', () => {
+            const result = parseMediaFilename(
+                '[Erai-raws] One Piece - 1137 [1080p][HEVC].mkv',
+                'One Piece S01',
+            );
+
+            assert.equal(result.title, 'One Piece');
+            assert.equal(result.seasonNumber, 1);
+            assert.equal(result.episodeNumber, 1137);
+        });
+
+        it('strips END suffix from final episode', () => {
+            const result = parseMediaFilename(
+                '[Golumpa] JUJUTSU KAISEN - 24 END [CR-Dub 720p x264 AAC] [D8685DC9].mkv',
+            );
+
+            assert.equal(result.type, 'series');
+            assert.equal(result.title, 'JUJUTSU KAISEN');
+            assert.equal(result.seasonNumber, 1);
+            assert.equal(result.episodeNumber, 24);
+        });
+    });
 });
