@@ -27,6 +27,8 @@ export function openDatabase(options = {}) {
 
 function runMigrations(database) {
     ensureColumn(database, 'media_files', 'still_path', 'TEXT');
+    ensureColumn(database, 'media_files', 'preferred_audio_stream', 'INTEGER');
+    ensureColumn(database, 'media_files', 'subtitle_tracks', 'TEXT');
 }
 
 function initializeSchema(database) {

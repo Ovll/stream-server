@@ -63,6 +63,16 @@ export interface MainRow {
 
 export type ScreenMode = "main" | "seriesDetails";
 
+export interface SubtitleTrack {
+  id: string;
+  index: number;
+  codec: string;
+  language: string | null;
+  title: string | null;
+  default: boolean;
+  forced: boolean;
+}
+
 export interface PlayTarget {
   mediaItemId: number;
   mediaFileId: number;
@@ -78,4 +88,5 @@ export interface PlayTarget {
   completed: number;
   streamUrl: string;
   codec: string | null;
+  subtitleTracks: SubtitleTrack[];
 }

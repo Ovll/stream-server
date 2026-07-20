@@ -4,8 +4,8 @@ import path from 'path';
 
 import { getDatabase } from '../db/database.js';
 import {
-    matchMediaItemWithTmdb,
-    refreshSeriesEpisodesFromTmdb,
+    matchMediaItem,
+    refreshSeriesEpisodes,
 } from '../metadata/metadata.service.js';
 import { parseMediaFilename } from './filenameParser.js';
 import { upsertMediaFromParsedFile } from './media.repository.js';
@@ -105,7 +105,7 @@ async function handleAddOrChange(filePath, mediaDir, options) {
 
 async function enrichMediaItem(mediaItemId) {
     try {
-        const matchResult = await matchMediaItemWithTmdb(mediaItemId);
+        const matchResult = await matchMediaItem(mediaItemId);
 
         if (!matchResult?.updated) {
             console.warn(`No TMDB match found for media item ${mediaItemId}`);
@@ -113,7 +113,7 @@ async function enrichMediaItem(mediaItemId) {
         }
 
         if (matchResult.updated.type === 'series') {
-            await refreshSeriesEpisodesFromTmdb(mediaItemId);
+            await refreshSeriesEpisodes(mediaItemId);
         }
 
         console.log(`Media metadata enriched: item ${mediaItemId}`);

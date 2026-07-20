@@ -6,7 +6,7 @@ export interface Player {
   isPaused(): boolean;
   getDuration(): number;
   getCurrentPosition(): number;
-  load(streamUrl: string, autoPlay?: boolean, startTime?: number): Promise<void>;
+  load(streamUrl: string, autoPlay?: boolean, startTime?: number, subtitleSrc?: string): Promise<void>;
   play(): void;
   pause(): void;
   stop(): void;
@@ -89,13 +89,13 @@ export class CommonPlayer implements Player {
     return cleanUrl.endsWith(".m3u8") || cleanUrl.endsWith(".mpd");
   }
 
-  async load(streamUrl: string, autoPlay = false, startTime?: number): Promise<void> {
+  async load(streamUrl: string, autoPlay = false, startTime?: number, subtitleSrc?: string): Promise<void> {
     if (this._isDestroyed) {
       throw new Error("Player was destroyed.");
     }
 
     if (this.shouldUseNativeVideo(streamUrl)) {
-      await this.loadNative(streamUrl, autoPlay, startTime);
+      await this.loadNative(streamUrl, autoPlay, startTime, subtitleSrc);
       return;
     }
 
@@ -104,10 +104,24 @@ export class CommonPlayer implements Player {
       return;
     }
 
-    await this.loadNative(streamUrl, autoPlay, startTime);
+    await this.loadNative(streamUrl, autoPlay, startTime, subtitleSrc);
   }
 
-  private async loadNative(streamUrl: string, autoPlay: boolean, startTime?: number): Promise<void> {
+  private setSubtitleTrack(subtitleSrc?: string): void {
+    // Remove all existing <track> elements before load() so TV browsers see a clean state.
+    const existing = this._videoElement.querySelectorAll("track");
+    existing.forEach(t => t.remove());
+
+    if (subtitleSrc) {
+      const track = document.createElement("track");
+      track.kind = "subtitles";
+      track.src = subtitleSrc;
+      track.default = true;
+      this._videoElement.appendChild(track);
+    }
+  }
+
+  private async loadNative(streamUrl: string, autoPlay: boolean, startTime?: number, subtitleSrc?: string): Promise<void> {
     try {
       this.showVideo();
 
@@ -121,6 +135,7 @@ export class CommonPlayer implements Player {
         this._videoElement.pause();
         this._videoElement.src = streamUrl;
         this._videoElement.preload = "auto";
+        this.setSubtitleTrack(subtitleSrc);
         this._videoElement.load();
 
         this._currentUrl = streamUrl;

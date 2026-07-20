@@ -1,11 +1,15 @@
 import { getDatabase } from '../db/database.js';
 import { cacheTmdbImage } from '../images/imageCache.service.js';
 import {
+    searchKinopoiskSeries,
+} from './kinopoisk.client.js';
+import {
     getTvEpisodeDetails,
     getTvEpisodeImages,
     searchMovie,
     searchTv,
 } from './tmdb.client.js';
+import { generateEpisodeStill } from './screenshot.service.js';
 
 function getMediaItemById(mediaItemId) {
     const db = getDatabase();
@@ -58,7 +62,7 @@ function getMediaFilesByMediaItemId(mediaItemId) {
         .all(mediaItemId);
 }
 
-function updateMediaItemFromTmdb(mediaItemId, data) {
+function updateMediaItemMetadata(mediaItemId, data) {
     const db = getDatabase();
 
     db.prepare(
@@ -139,7 +143,7 @@ function normalizeTitle(value) {
     return String(value || '')
         .toLowerCase()
         .replace(/&/g, 'and')
-        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -176,7 +180,9 @@ function selectBestTvMatch(results, mediaItem) {
         return null;
     }
 
-    const preferredYear = mediaItem.year ? Number(mediaItem.year) : null;
+    const preferredYear = mediaItem.year
+        ? Number(mediaItem.year)
+        : null;
 
     const scored = results.map((item, index) => {
         const firstAirYear = getYearFromDate(item.first_air_date);
@@ -189,7 +195,9 @@ function selectBestTvMatch(results, mediaItem) {
         const yearScore =
             preferredYear && firstAirYear === preferredYear
                 ? 100
-                : preferredYear && firstAirYear && Math.abs(firstAirYear - preferredYear) <= 1
+                : preferredYear &&
+                    firstAirYear &&
+                    Math.abs(firstAirYear - preferredYear) <= 1
                     ? 30
                     : 0;
 
@@ -199,7 +207,11 @@ function selectBestTvMatch(results, mediaItem) {
         return {
             item,
             index,
-            score: titleScore + yearScore + posterScore + backdropScore,
+            score:
+                titleScore +
+                yearScore +
+                posterScore +
+                backdropScore,
         };
     });
 
@@ -211,7 +223,13 @@ function selectBestTvMatch(results, mediaItem) {
         return a.index - b.index;
     });
 
-    return scored[0]?.item || null;
+    const best = scored[0];
+
+    if (!best || best.score < 50) {
+        return null;
+    }
+
+    return best.item;
 }
 
 function selectBestMovieMatch(results, mediaItem) {
@@ -219,7 +237,9 @@ function selectBestMovieMatch(results, mediaItem) {
         return null;
     }
 
-    const preferredYear = mediaItem.year ? Number(mediaItem.year) : null;
+    const preferredYear = mediaItem.year
+        ? Number(mediaItem.year)
+        : null;
 
     const scored = results.map((item, index) => {
         const releaseYear = getYearFromDate(item.release_date);
@@ -232,7 +252,9 @@ function selectBestMovieMatch(results, mediaItem) {
         const yearScore =
             preferredYear && releaseYear === preferredYear
                 ? 100
-                : preferredYear && releaseYear && Math.abs(releaseYear - preferredYear) <= 1
+                : preferredYear &&
+                    releaseYear &&
+                    Math.abs(releaseYear - preferredYear) <= 1
                     ? 30
                     : 0;
 
@@ -242,7 +264,11 @@ function selectBestMovieMatch(results, mediaItem) {
         return {
             item,
             index,
-            score: titleScore + yearScore + posterScore + backdropScore,
+            score:
+                titleScore +
+                yearScore +
+                posterScore +
+                backdropScore,
         };
     });
 
@@ -254,10 +280,83 @@ function selectBestMovieMatch(results, mediaItem) {
         return a.index - b.index;
     });
 
-    return scored[0]?.item || null;
+    const best = scored[0];
+
+    if (!best || best.score < 50) {
+        return null;
+    }
+
+    return best.item;
 }
 
-export async function matchMediaItemWithTmdb(mediaItemId) {
+function selectBestKinopoiskSeriesMatch(results, mediaItem) {
+    if (!Array.isArray(results) || results.length === 0) {
+        return null;
+    }
+
+    const preferredYear = mediaItem.year
+        ? Number(mediaItem.year)
+        : null;
+
+    const scored = results.map((item, index) => {
+        const titleScore = Math.max(
+            scoreTitleMatch(item.name, mediaItem.title),
+            scoreTitleMatch(item.alternativeName, mediaItem.title),
+            scoreTitleMatch(item.enName, mediaItem.title),
+        );
+
+        const resultYear = item.year
+            ? Number(item.year)
+            : null;
+
+        const yearScore =
+            preferredYear && resultYear === preferredYear
+                ? 100
+                : preferredYear &&
+                    resultYear &&
+                    Math.abs(resultYear - preferredYear) <= 1
+                    ? 30
+                    : 0;
+
+        const posterScore =
+            item.poster?.url || item.poster?.previewUrl
+                ? 10
+                : 0;
+
+        const backdropScore =
+            item.backdrop?.url || item.backdrop?.previewUrl
+                ? 5
+                : 0;
+
+        return {
+            item,
+            index,
+            score:
+                titleScore +
+                yearScore +
+                posterScore +
+                backdropScore,
+        };
+    });
+
+    scored.sort((a, b) => {
+        if (b.score !== a.score) {
+            return b.score - a.score;
+        }
+
+        return a.index - b.index;
+    });
+
+    const best = scored[0];
+
+    if (!best || best.score < 50) {
+        return null;
+    }
+
+    return best.item;
+}
+
+export async function matchMediaItem(mediaItemId) {
     const mediaItem = getMediaItemById(mediaItemId);
 
     if (!mediaItem) {
@@ -265,7 +364,7 @@ export async function matchMediaItemWithTmdb(mediaItemId) {
     }
 
     if (mediaItem.type === 'series') {
-        return matchSeriesWithTmdb(mediaItem);
+        return matchSeriesWithMetadataProvider(mediaItem);
     }
 
     if (mediaItem.type === 'movie') {
@@ -279,106 +378,337 @@ export async function matchMediaItemWithTmdb(mediaItemId) {
     };
 }
 
+function containsCyrillic(value) {
+    return /[\u0400-\u04FF]/u.test(String(value || ''));
+}
+
+async function matchSeriesWithMetadataProvider(mediaItem) {
+    if (containsCyrillic(mediaItem.title)) {
+        const kinopoiskResult =
+            await matchSeriesWithKinopoisk(mediaItem);
+
+        if (kinopoiskResult.match) {
+            return kinopoiskResult;
+        }
+
+        console.log(
+            `No Kinopoisk match for "${mediaItem.title}". Trying TMDB...`,
+        );
+
+        return matchSeriesWithTmdb(mediaItem);
+    }
+
+    const tmdbResult = await matchSeriesWithTmdb(mediaItem);
+
+    if (tmdbResult.match) {
+        return tmdbResult;
+    }
+
+    console.log(
+        `No TMDB match for "${mediaItem.title}". Trying Kinopoisk...`,
+    );
+
+    return matchSeriesWithKinopoisk(mediaItem);
+}
+
 async function matchSeriesWithTmdb(mediaItem) {
     const searchResult = await searchTv(mediaItem.title);
-    const match = selectBestTvMatch(searchResult.results, mediaItem);
+
+    const match = selectBestTvMatch(
+        searchResult.results,
+        mediaItem,
+    );
 
     if (!match) {
         return {
             mediaItem,
+            provider: 'tmdb',
             match: null,
             updated: null,
         };
     }
 
-    const previousExternalId = mediaItem.external_id ? String(mediaItem.external_id) : null;
+    const previousExternalId = mediaItem.external_id
+        ? String(mediaItem.external_id)
+        : null;
+
+    const previousExternalSource =
+        mediaItem.external_source || null;
+
     const nextExternalId = String(match.id);
 
-    if (previousExternalId && previousExternalId !== nextExternalId) {
+    if (
+        previousExternalId &&
+        (
+            previousExternalSource !== 'tmdb' ||
+            previousExternalId !== nextExternalId
+        )
+    ) {
         clearEpisodeMetadataForMediaItem(mediaItem.id);
     }
 
-    await cacheTmdbImage('posters', match.poster_path, 'w500');
-    await cacheTmdbImage('backdrops', match.backdrop_path, 'w780');
+    await cacheTmdbImage(
+        'posters',
+        match.poster_path,
+        'w500',
+    );
 
-    const firstAirYear = getYearFromDate(match.first_air_date);
+    await cacheTmdbImage(
+        'backdrops',
+        match.backdrop_path,
+        'w780',
+    );
 
-    const updated = updateMediaItemFromTmdb(mediaItem.id, {
-        title: match.name || mediaItem.title,
-        sortTitle: normalizeTitle(match.name || mediaItem.title),
-        year: firstAirYear || mediaItem.year || null,
-        overview: match.overview || null,
-        posterPath: match.poster_path || null,
-        backdropPath: match.backdrop_path || null,
-        externalSource: 'tmdb',
-        externalId: match.id,
-        metadata: {
-            tmdb: {
-                id: match.id,
-                name: match.name,
-                originalName: match.original_name,
-                firstAirDate: match.first_air_date,
-                overview: match.overview,
-                posterPath: match.poster_path,
-                backdropPath: match.backdrop_path,
+    const firstAirYear = getYearFromDate(
+        match.first_air_date,
+    );
+
+    const updated = updateMediaItemMetadata(
+        mediaItem.id,
+        {
+            title: match.name || mediaItem.title,
+
+            sortTitle: normalizeTitle(
+                match.name || mediaItem.title,
+            ),
+
+            year:
+                firstAirYear ||
+                mediaItem.year ||
+                null,
+
+            overview: match.overview || null,
+            posterPath: match.poster_path || null,
+            backdropPath: match.backdrop_path || null,
+            externalSource: 'tmdb',
+            externalId: match.id,
+
+            metadata: {
+                tmdb: {
+                    id: match.id,
+                    name: match.name,
+                    originalName: match.original_name,
+                    firstAirDate: match.first_air_date,
+                    overview: match.overview,
+                    posterPath: match.poster_path,
+                    backdropPath: match.backdrop_path,
+                },
             },
         },
-    });
+    );
 
     return {
         mediaItem,
+        provider: 'tmdb',
+        match,
+        updated,
+    };
+}
+
+async function matchSeriesWithKinopoisk(mediaItem) {
+    const results = await searchKinopoiskSeries(
+        mediaItem.title,
+    );
+
+    const match = selectBestKinopoiskSeriesMatch(
+        results,
+        mediaItem,
+    );
+
+    if (!match) {
+        return {
+            mediaItem,
+            provider: 'kinopoisk',
+            match: null,
+            updated: null,
+        };
+    }
+
+    const previousExternalId = mediaItem.external_id
+        ? String(mediaItem.external_id)
+        : null;
+
+    const previousExternalSource =
+        mediaItem.external_source || null;
+
+    const nextExternalId = String(match.id);
+
+    if (
+        previousExternalId &&
+        (
+            previousExternalSource !== 'kinopoisk' ||
+            previousExternalId !== nextExternalId
+        )
+    ) {
+        clearEpisodeMetadataForMediaItem(mediaItem.id);
+    }
+
+    const title =
+        match.name ||
+        match.alternativeName ||
+        match.enName ||
+        mediaItem.title;
+
+    const remotePosterPath =
+        match.poster?.url ||
+        match.poster?.previewUrl ||
+        null;
+
+    const remoteBackdropPath =
+        match.backdrop?.url ||
+        match.backdrop?.previewUrl ||
+        null;
+
+    const posterPath = await cacheTmdbImage(
+        'posters',
+        remotePosterPath,
+        'w500',
+    );
+
+    const backdropPath = await cacheTmdbImage(
+        'backdrops',
+        remoteBackdropPath,
+        'w780',
+    );
+
+    const updated = updateMediaItemMetadata(
+        mediaItem.id,
+        {
+            title,
+
+            sortTitle: normalizeTitle(title),
+
+            year:
+                match.year ||
+                mediaItem.year ||
+                null,
+
+            overview:
+                match.description ||
+                match.shortDescription ||
+                null,
+
+            posterPath,
+            backdropPath,
+            externalSource: 'kinopoisk',
+            externalId: match.id,
+
+            metadata: {
+                kinopoisk: {
+                    id: match.id,
+                    name: match.name,
+                    alternativeName:
+                        match.alternativeName,
+                    enName: match.enName,
+                    year: match.year,
+                    description: match.description,
+                    shortDescription:
+                        match.shortDescription,
+                    type: match.type,
+                    status: match.status,
+                    ageRating: match.ageRating,
+                    poster: match.poster || null,
+                    backdrop: match.backdrop || null,
+                    rating: match.rating || null,
+                    votes: match.votes || null,
+                    genres: match.genres || [],
+                    countries: match.countries || [],
+                    releaseYears:
+                        match.releaseYears || [],
+                },
+            },
+        },
+    );
+
+    return {
+        mediaItem,
+        provider: 'kinopoisk',
         match,
         updated,
     };
 }
 
 async function matchMovieWithTmdb(mediaItem) {
-    const searchResult = await searchMovie(mediaItem.title, mediaItem.year);
-    const match = selectBestMovieMatch(searchResult.results, mediaItem);
+    const searchResult = await searchMovie(
+        mediaItem.title,
+        mediaItem.year,
+    );
+
+    const match = selectBestMovieMatch(
+        searchResult.results,
+        mediaItem,
+    );
 
     if (!match) {
         return {
             mediaItem,
+            provider: 'tmdb',
             match: null,
             updated: null,
         };
     }
 
-    await cacheTmdbImage('posters', match.poster_path, 'w500');
-    await cacheTmdbImage('backdrops', match.backdrop_path, 'w780');
+    await cacheTmdbImage(
+        'posters',
+        match.poster_path,
+        'w500',
+    );
 
-    const releaseYear = getYearFromDate(match.release_date);
+    await cacheTmdbImage(
+        'backdrops',
+        match.backdrop_path,
+        'w780',
+    );
 
-    const updated = updateMediaItemFromTmdb(mediaItem.id, {
-        title: match.title || mediaItem.title,
-        sortTitle: normalizeTitle(match.title || mediaItem.title),
-        year: releaseYear || mediaItem.year || null,
-        overview: match.overview || null,
-        posterPath: match.poster_path || null,
-        backdropPath: match.backdrop_path || null,
-        externalSource: 'tmdb',
-        externalId: match.id,
-        metadata: {
-            tmdb: {
-                id: match.id,
-                title: match.title,
-                originalTitle: match.original_title,
-                releaseDate: match.release_date,
-                overview: match.overview,
-                posterPath: match.poster_path,
-                backdropPath: match.backdrop_path,
+    const releaseYear = getYearFromDate(
+        match.release_date,
+    );
+
+    const updated = updateMediaItemMetadata(
+        mediaItem.id,
+        {
+            title: match.title || mediaItem.title,
+
+            sortTitle: normalizeTitle(
+                match.title || mediaItem.title,
+            ),
+
+            year:
+                releaseYear ||
+                mediaItem.year ||
+                null,
+
+            overview: match.overview || null,
+            posterPath: match.poster_path || null,
+            backdropPath: match.backdrop_path || null,
+            externalSource: 'tmdb',
+            externalId: match.id,
+
+            metadata: {
+                tmdb: {
+                    id: match.id,
+                    title: match.title,
+                    originalTitle: match.original_title,
+                    releaseDate: match.release_date,
+                    overview: match.overview,
+                    posterPath: match.poster_path,
+                    backdropPath: match.backdrop_path,
+                },
             },
         },
-    });
+    );
 
     return {
         mediaItem,
+        provider: 'tmdb',
         match,
         updated,
     };
 }
 
-export async function refreshSeriesEpisodesFromTmdb(mediaItemId) {
+export async function refreshSeriesEpisodes(
+    mediaItemId,
+) {
     const mediaItem = getMediaItemById(mediaItemId);
 
     if (!mediaItem) {
@@ -393,99 +723,225 @@ export async function refreshSeriesEpisodesFromTmdb(mediaItemId) {
         };
     }
 
-    if (mediaItem.external_source !== 'tmdb' || !mediaItem.external_id) {
+    if (!mediaItem.external_source) {
         return {
             mediaItem,
             updatedEpisodes: [],
             failedEpisodes: [],
-            warning: `Media item ${mediaItemId} is not matched with TMDB`,
+            warning:
+                `Media item ${mediaItemId} has no metadata provider`,
         };
     }
 
-    const tmdbSeriesId = Number(mediaItem.external_id);
+    if (mediaItem.external_source === 'kinopoisk') {
+        const mediaFiles =
+            getMediaFilesByMediaItemId(mediaItemId);
 
-    if (!Number.isInteger(tmdbSeriesId) || tmdbSeriesId <= 0) {
+        const updatedEpisodes = [];
+        const failedEpisodes = [];
+
+        for (const mediaFile of mediaFiles) {
+            if (
+                !mediaFile.season_number ||
+                !mediaFile.episode_number
+            ) {
+                continue;
+            }
+
+            try {
+                const stillPath =
+                    await generateEpisodeStill(
+                        mediaFile.absolute_path,
+                    );
+
+                const episodeTitle =
+                    mediaFile.episode_title ||
+                    `Episode ${mediaFile.episode_number}`;
+
+                updateMediaFileEpisodeMetadata(
+                    mediaFile.id,
+                    {
+                        episodeTitle,
+                        stillPath,
+                    },
+                );
+
+                updatedEpisodes.push({
+                    mediaFileId: mediaFile.id,
+                    seasonNumber:
+                        mediaFile.season_number,
+                    episodeNumber:
+                        mediaFile.episode_number,
+                    episodeTitle,
+                    stillPath,
+                });
+            } catch (error) {
+                failedEpisodes.push({
+                    mediaFileId: mediaFile.id,
+                    seasonNumber:
+                        mediaFile.season_number,
+                    episodeNumber:
+                        mediaFile.episode_number,
+                    error:
+                        error instanceof Error
+                            ? error.message
+                            : String(error),
+                });
+
+                console.warn(
+                    `Failed to generate local still for media file ${mediaFile.id}:`,
+                    error instanceof Error
+                        ? error.message
+                        : error,
+                );
+            }
+        }
+
+        return {
+            mediaItem:
+                getMediaItemById(mediaItemId),
+            updatedEpisodes,
+            failedEpisodes,
+        };
+    }
+
+    const tmdbSeriesId = Number(
+        mediaItem.external_id,
+    );
+
+    if (
+        !Number.isInteger(tmdbSeriesId) ||
+        tmdbSeriesId <= 0
+    ) {
         return {
             mediaItem,
             updatedEpisodes: [],
             failedEpisodes: [],
-            warning: `Invalid TMDB series id for media item ${mediaItemId}`,
+            warning:
+                `Invalid TMDB series id for media item ${mediaItemId}`,
         };
     }
 
-    const mediaFiles = getMediaFilesByMediaItemId(mediaItemId);
+    const mediaFiles =
+        getMediaFilesByMediaItemId(mediaItemId);
+
     const updatedEpisodes = [];
     const failedEpisodes = [];
 
     for (const mediaFile of mediaFiles) {
-        if (!mediaFile.season_number || !mediaFile.episode_number) {
+        if (
+            !mediaFile.season_number ||
+            !mediaFile.episode_number
+        ) {
             continue;
         }
 
         try {
-            const details = await getTvEpisodeDetails(
-                tmdbSeriesId,
-                mediaFile.season_number,
-                mediaFile.episode_number,
-            );
+            const details =
+                await getTvEpisodeDetails(
+                    tmdbSeriesId,
+                    mediaFile.season_number,
+                    mediaFile.episode_number,
+                );
 
-            let stillPath = details?.still_path || null;
+            let stillPath =
+                details?.still_path || null;
 
             if (!stillPath) {
                 try {
-                    const images = await getTvEpisodeImages(
-                        tmdbSeriesId,
-                        mediaFile.season_number,
-                        mediaFile.episode_number,
-                    );
+                    const images =
+                        await getTvEpisodeImages(
+                            tmdbSeriesId,
+                            mediaFile.season_number,
+                            mediaFile.episode_number,
+                        );
 
-                    stillPath = images?.stills?.[0]?.file_path || null;
-                } catch (imageErr) {
+                    stillPath =
+                        images?.stills?.[0]
+                            ?.file_path ||
+                        null;
+                } catch (imageError) {
                     console.warn(
                         `No TMDB episode images for media file ${mediaFile.id}:`,
-                        imageErr instanceof Error ? imageErr.message : imageErr,
+                        imageError instanceof Error
+                            ? imageError.message
+                            : imageError,
                     );
                 }
             }
 
-            await cacheTmdbImage('stills', stillPath, 'w300');
+            if (stillPath) {
+                stillPath = await cacheTmdbImage(
+                    'stills',
+                    stillPath,
+                    'w300',
+                );
+            }
 
-            const episodeTitle = details?.name || mediaFile.episode_title || null;
+            if (!stillPath) {
+                stillPath = await generateEpisodeStill(
+                    mediaFile.absolute_path,
+                );
+            }
 
-            updateMediaFileEpisodeMetadata(mediaFile.id, {
-                episodeTitle,
-                stillPath,
-            });
+            const episodeTitle =
+                details?.name ||
+                mediaFile.episode_title ||
+                null;
+
+            updateMediaFileEpisodeMetadata(
+                mediaFile.id,
+                {
+                    episodeTitle,
+                    stillPath,
+                },
+            );
 
             updatedEpisodes.push({
                 mediaFileId: mediaFile.id,
-                seasonNumber: mediaFile.season_number,
-                episodeNumber: mediaFile.episode_number,
+                seasonNumber:
+                    mediaFile.season_number,
+                episodeNumber:
+                    mediaFile.episode_number,
                 episodeTitle,
                 stillPath,
             });
-        } catch (err) {
-            updateMediaFileEpisodeMetadata(mediaFile.id, {
-                episodeTitle: mediaFile.episode_title || null,
-                stillPath: null,
-            });
+        } catch (error) {
+            updateMediaFileEpisodeMetadata(
+                mediaFile.id,
+                {
+                    episodeTitle:
+                        mediaFile.episode_title ||
+                        null,
+
+                    stillPath: null,
+                },
+            );
 
             failedEpisodes.push({
                 mediaFileId: mediaFile.id,
-                seasonNumber: mediaFile.season_number,
-                episodeNumber: mediaFile.episode_number,
-                error: err instanceof Error ? err.message : String(err),
+                seasonNumber:
+                    mediaFile.season_number,
+                episodeNumber:
+                    mediaFile.episode_number,
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : String(error),
             });
 
             console.warn(
                 `Failed to refresh episode metadata for media file ${mediaFile.id}:`,
-                err instanceof Error ? err.message : err,
+                error instanceof Error
+                    ? error.message
+                    : error,
             );
         }
     }
 
     return {
-        mediaItem: getMediaItemById(mediaItemId),
+        mediaItem:
+            getMediaItemById(mediaItemId),
         updatedEpisodes,
         failedEpisodes,
     };

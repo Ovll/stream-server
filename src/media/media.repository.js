@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { getDatabase } from '../db/database.js';
 import { getCachedImagePublicPath } from '../images/imageCache.service.js';
 
@@ -35,6 +37,7 @@ export function upsertMediaFromParsedFile(fileInfo) {
                 episodeNumber: fileInfo.episodeNumber,
                 episodeTitle: existingFile.episode_title || fileInfo.episodeTitle,
                 codec: fileInfo.codec,
+                subtitleTracks: fileInfo.subtitleTracks,
             });
 
             return {
@@ -59,6 +62,7 @@ export function upsertMediaFromParsedFile(fileInfo) {
             episodeNumber: fileInfo.episodeNumber,
             episodeTitle: fileInfo.episodeTitle,
             codec: fileInfo.codec,
+            subtitleTracks: fileInfo.subtitleTracks,
         });
 
         return {
@@ -228,8 +232,10 @@ export function upsertMediaFile({
     episodeNumber,
     episodeTitle,
     codec = null,
+    subtitleTracks = null,
 }) {
     const db = getDatabase();
+    const subtitleTracksJson = subtitleTracks ? JSON.stringify(subtitleTracks) : null;
 
     const existing = db
         .prepare(
@@ -243,6 +249,13 @@ export function upsertMediaFile({
         .get(absolutePath);
 
     if (existing) {
+        const sizeChanged = existing.size_bytes !== sizeBytes;
+        const tracksChanged = existing.subtitle_tracks !== subtitleTracksJson;
+
+        if (sizeChanged || tracksChanged) {
+            invalidateSubtitleCache(existing.id);
+        }
+
         db.prepare(
             `
             UPDATE media_files
@@ -254,6 +267,7 @@ export function upsertMediaFile({
                 episode_number = ?,
                 episode_title = ?,
                 codec = COALESCE(?, codec),
+                subtitle_tracks = ?,
                 last_seen_at = CURRENT_TIMESTAMP
             WHERE id = ?
             `,
@@ -266,6 +280,7 @@ export function upsertMediaFile({
             episodeNumber,
             episodeTitle,
             codec,
+            subtitleTracksJson,
             existing.id,
         );
 
@@ -284,9 +299,10 @@ export function upsertMediaFile({
                 season_number,
                 episode_number,
                 episode_title,
-                codec
+                codec,
+                subtitle_tracks
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
         )
         .run(
@@ -299,9 +315,26 @@ export function upsertMediaFile({
             episodeNumber,
             episodeTitle,
             codec,
+            subtitleTracksJson,
         );
 
     return db.prepare(`SELECT * FROM media_files WHERE id = ?`).get(result.lastInsertRowid);
+}
+
+function invalidateSubtitleCache(mediaFileId) {
+    const cacheDir = path.join(process.cwd(), 'data', 'subtitles');
+    const prefix = `${mediaFileId}_`;
+
+    try {
+        const files = fs.readdirSync(cacheDir);
+        for (const file of files) {
+            if (file.startsWith(prefix) && file.endsWith('.vtt')) {
+                fs.unlinkSync(path.join(cacheDir, file));
+            }
+        }
+    } catch {
+        // cache dir may not exist yet — nothing to invalidate
+    }
 }
 
 export function listMediaItemsForHome() {
@@ -730,9 +763,46 @@ function toPlayTarget(mediaItem, file) {
         durationSeconds: file.duration_seconds || null,
         completed: file.completed || 0,
 
-        streamUrl: `/stream/direct/${file.id}`,
+        streamUrl: file.preferred_audio_stream != null
+            ? `/stream/remux/${file.id}?audioStream=${file.preferred_audio_stream}`
+            : `/stream/direct/${file.id}`,
         codec: file.codec || null,
+
+        subtitleTracks: sortSubtitleTracks(
+            file.subtitle_tracks ? JSON.parse(file.subtitle_tracks) : [],
+        ),
     };
+}
+
+function sortSubtitleTracks(tracks) {
+    if (!tracks || tracks.length === 0) return [];
+
+    return [...tracks].sort((a, b) => {
+        // forced tracks first, then default, then original order
+        if (b.forced !== a.forced) return b.forced ? 1 : -1;
+        if (b.default !== a.default) return b.default ? 1 : -1;
+        return 0;
+    });
+}
+
+export function setMediaItemAudioStream(mediaItemId, audioStream) {
+    const db = getDatabase();
+    const value = audioStream != null ? audioStream : null;
+    db.prepare(`
+        UPDATE media_files
+        SET preferred_audio_stream = ?
+        WHERE media_item_id = ?
+    `).run(value, mediaItemId);
+}
+
+export function setMediaFileAudioStream(mediaFileId, audioStream) {
+    const db = getDatabase();
+    const value = audioStream != null ? audioStream : null;
+    db.prepare(`
+        UPDATE media_files
+        SET preferred_audio_stream = ?
+        WHERE id = ?
+    `).run(value, mediaFileId);
 }
 
 function needsTranscode(codec) {
@@ -742,5 +812,21 @@ function needsTranscode(codec) {
 }
 
 function buildCachedImageUrl(kind, filePath, size = 'w500') {
-    return getCachedImagePublicPath(kind, filePath, size);
+    if (!filePath) {
+        return null;
+    }
+
+    if (
+        filePath.startsWith('/images/') ||
+        filePath.startsWith('http://') ||
+        filePath.startsWith('https://')
+    ) {
+        return filePath;
+    }
+
+    return getCachedImagePublicPath(
+        kind,
+        filePath,
+        size,
+    );
 }

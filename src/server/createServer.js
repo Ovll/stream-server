@@ -8,6 +8,8 @@ import { createProgressRouter } from '../progress/progress.routes.js';
 import { createMetadataRouter } from '../metadata/metadata.routes.js';
 import { createCatalogEventsRouter, notifyCatalogChanged } from '../events/catalogEvents.js';
 import { createSettingsRouter } from '../settings/settings.routes.js';
+import { createSubtitleRouter } from '../subtitles/subtitle.routes.js';
+import { ensureSubtitleCacheDir } from '../subtitles/subtitle.service.js';
 
 export function createServer(options) {
     const {
@@ -15,6 +17,8 @@ export function createServer(options) {
         fontDir,
         publicDir,
     } = options;
+
+    ensureSubtitleCacheDir();
 
     const app = express();
 
@@ -67,6 +71,9 @@ export function createServer(options) {
 
     // Video streaming API.
     app.use('/stream', createStreamRouter());
+
+    // Subtitle extraction and caching.
+    app.use('/api/subtitles', createSubtitleRouter());
 
     // Desktop app settings page (GET/POST /settings).
     app.use('/settings', createSettingsRouter());

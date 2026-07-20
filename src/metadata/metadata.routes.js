@@ -6,8 +6,8 @@ import {
     searchTv,
 } from './tmdb.client.js';
 import {
-    matchMediaItemWithTmdb,
-    refreshSeriesEpisodesFromTmdb,
+    matchMediaItem,
+    refreshSeriesEpisodes,
 } from './metadata.service.js';
 
 export function createMetadataRouter() {
@@ -75,7 +75,7 @@ export function createMetadataRouter() {
         }
     });
 
-    router.post('/tmdb/match/:mediaItemId', async (req, res) => {
+    router.post('/match/:mediaItemId', async (req, res) => {
         try {
             const mediaItemId = Number(req.params.mediaItemId);
 
@@ -83,7 +83,7 @@ export function createMetadataRouter() {
                 return res.status(400).json({ error: 'Invalid mediaItemId' });
             }
 
-            const result = await matchMediaItemWithTmdb(mediaItemId);
+            const result = await matchMediaItem(mediaItemId);
 
             if (!result) {
                 return res.status(404).json({ error: 'Media item not found' });
@@ -96,24 +96,31 @@ export function createMetadataRouter() {
         }
     });
 
-    router.post('/tmdb/refresh-episodes/:mediaItemId', async (req, res) => {
+    router.post('/refresh-episodes/:mediaItemId', async (req, res) => {
         try {
             const mediaItemId = Number(req.params.mediaItemId);
 
             if (!Number.isInteger(mediaItemId) || mediaItemId <= 0) {
-                return res.status(400).json({ error: 'Invalid mediaItemId' });
+                return res.status(400).json({
+                    error: 'Invalid mediaItemId',
+                });
             }
 
-            const result = await refreshSeriesEpisodesFromTmdb(mediaItemId);
+            const result = await refreshSeriesEpisodes(mediaItemId);
 
             if (!result) {
-                return res.status(404).json({ error: 'Media item not found' });
+                return res.status(404).json({
+                    error: 'Media item not found',
+                });
             }
 
             res.json(result);
-        } catch (err) {
-            console.error('TMDB episode refresh failed:', err);
-            res.status(500).json({ error: 'TMDB episode refresh failed' });
+        } catch (error) {
+            console.error('Episode refresh failed:', error);
+
+            res.status(500).json({
+                error: 'Episode refresh failed',
+            });
         }
     });
 

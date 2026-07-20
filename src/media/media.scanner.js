@@ -3,13 +3,15 @@ import path from 'path';
 
 import { getDatabase } from '../db/database.js';
 import {
-    matchMediaItemWithTmdb,
-    refreshSeriesEpisodesFromTmdb,
+    matchMediaItem,
+    refreshSeriesEpisodes,
 } from '../metadata/metadata.service.js';
 import { parseMediaFilename } from './filenameParser.js';
 import { upsertMediaFromParsedFile } from './media.repository.js';
+import { probeSubtitleTracks } from '../subtitles/subtitle.probe.js';
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.webm'];
+const MIN_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
 
 export async function scanMediaFolder(mediaDir, options = {}) {
     const {
@@ -66,16 +68,19 @@ export async function scanMediaFolder(mediaDir, options = {}) {
         const stat = await fs.promises.stat(absolutePath);
 
         if (!stat.isFile()) continue;
+        if (stat.size < MIN_VIDEO_SIZE_BYTES) continue;
 
         seenAbsolutePaths.push(absolutePath);
 
         const parsed = parseMediaFilename(filename, folderName);
+        const subtitleTracks = await probeSubtitleTracks(absolutePath);
 
         const result = upsertMediaFromParsedFile({
             ...parsed,
             filename,
             absolutePath,
             sizeBytes: stat.size,
+            subtitleTracks,
         });
 
         items.push(result);
@@ -108,7 +113,7 @@ async function enrichScannedMediaItems(mediaItemIds) {
 
     for (const mediaItemId of mediaItemIds) {
         try {
-            const matchResult = await matchMediaItemWithTmdb(mediaItemId);
+            const matchResult = await matchMediaItem(mediaItemId);
 
             if (!matchResult?.updated) {
                 console.warn(`No TMDB match found for media item ${mediaItemId}`);
@@ -118,7 +123,7 @@ async function enrichScannedMediaItems(mediaItemIds) {
             enrichedItems += 1;
 
             if (matchResult.updated.type === 'series') {
-                await refreshSeriesEpisodesFromTmdb(mediaItemId);
+                await refreshSeriesEpisodes(mediaItemId);
             }
         } catch (err) {
             console.error(

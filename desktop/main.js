@@ -1,4 +1,4 @@
-const { app, Tray, Menu, nativeImage, shell, Notification } = require('electron');
+const { app, Tray, Menu, nativeImage, shell, Notification, powerSaveBlocker } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -63,6 +63,7 @@ let currentPort = null;
 let statusLabel = 'Server: Starting…';
 let config = loadConfig();
 let sseReq = null;
+let powerSaveId = null;
 
 function isPortFree(port) {
     return new Promise((resolve) => {
@@ -115,6 +116,8 @@ async function startServerProcess() {
         cwd: path.dirname(serverPath),
     });
 
+    powerSaveId = powerSaveBlocker.start('prevent-app-suspension');
+
     serverProcess.stdout.on('data', (data) => {
         const text = data.toString();
         process.stdout.write('[server] ' + text);
@@ -142,6 +145,10 @@ async function startServerProcess() {
 function stopServerProcess() {
     sseReq?.destroy();
     sseReq = null;
+    if (powerSaveId !== null) {
+        powerSaveBlocker.stop(powerSaveId);
+        powerSaveId = null;
+    }
     if (serverProcess) {
         serverProcess.kill();
         serverProcess = null;

@@ -1,4 +1,5 @@
 import { createSignal, onCleanup } from "solid-js";
+import { runtime } from "@/runtime";
 import { CommonPlayer } from "#devices/common/player";
 import type { PlayTarget } from "./types";
 import { getStreamUrlFromPlayTarget, savePlaybackProgress } from "./mediaApi";
@@ -79,7 +80,11 @@ export function usePlayback(options: { onEnded?: () => void } = {}) {
       currentPlayTarget = nextPlayTarget;
       setIsPlaying(true);
 
-      await nextPlayer.load(streamUrl, true, nextPlayTarget.positionSeconds || 0);
+      const subtitleSrc = nextPlayTarget.subtitleTracks?.length > 0
+        ? `${runtime.serverBase}/api/subtitles/${nextPlayTarget.mediaFileId}/${nextPlayTarget.subtitleTracks[0].id}`
+        : undefined;
+
+      await nextPlayer.load(streamUrl, true, nextPlayTarget.positionSeconds || 0, subtitleSrc);
 
       nextPlayer.onEnded(() => {
         stopCurrentMedia();
