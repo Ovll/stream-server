@@ -27,6 +27,7 @@ Thumbs.db
 
 # AI tooling
 .serena/
+.claude/
 openspec/
 CLAUDE.md
 REQUIREMENTS.md
